@@ -1,0 +1,340 @@
+[
+  {
+    "external_log_id": "log-buyer-001-login",
+    "timestamp": "2026-06-23T09:00:00Z",
+    "level": "info",
+    "service_name": "auth-service",
+    "trace_id": "trace-buyer-001-login",
+    "session_id": "session-buyer-001",
+    "user_id": "user-buyer-001",
+    "method": "POST",
+    "endpoint": "/auth/login",
+    "request_payload": {
+      "username": "buyer_001",
+      "password": "***MASKED***"
+    },
+    "response_status": 200,
+    "response_body": {
+      "user_id": "user-buyer-001",
+      "role": "customer",
+      "token": "***MASKED***"
+    },
+    "response_time_ms": 82
+  },
+  {
+    "external_log_id": "log-buyer-001-search",
+    "timestamp": "2026-06-23T09:00:08Z",
+    "level": "info",
+    "service_name": "product-service",
+    "trace_id": "trace-buyer-001-search",
+    "session_id": "session-buyer-001",
+    "user_id": "user-buyer-001",
+    "method": "GET",
+    "endpoint": "/products?query=headphones",
+    "request_payload": {},
+    "response_status": 200,
+    "response_body": {
+      "items": [
+        {"product_id": "prod-headphone-001", "name": "Wireless Headphones", "price": 1290000}
+      ],
+      "total": 1
+    },
+    "response_time_ms": 96
+  },
+  {
+    "external_log_id": "log-buyer-001-view-product",
+    "timestamp": "2026-06-23T09:00:15Z",
+    "level": "info",
+    "service_name": "product-service",
+    "trace_id": "trace-buyer-001-view-product",
+    "session_id": "session-buyer-001",
+    "user_id": "user-buyer-001",
+    "method": "GET",
+    "endpoint": "/products/prod-headphone-001",
+    "request_payload": {},
+    "response_status": 200,
+    "response_body": {
+      "product_id": "prod-headphone-001",
+      "name": "Wireless Headphones",
+      "price": 1290000,
+      "stock": 12
+    },
+    "response_time_ms": 71
+  },
+  {
+    "external_log_id": "log-buyer-001-add-cart",
+    "timestamp": "2026-06-23T09:00:23Z",
+    "level": "info",
+    "service_name": "order-service",
+    "trace_id": "trace-buyer-001-add-cart",
+    "session_id": "session-buyer-001",
+    "user_id": "user-buyer-001",
+    "method": "POST",
+    "endpoint": "/cart/items",
+    "request_payload": {
+      "product_id": "prod-headphone-001",
+      "quantity": 1
+    },
+    "response_status": 201,
+    "response_body": {
+      "cart_id": "cart-buyer-001",
+      "item_count": 1,
+      "subtotal": 1290000
+    },
+    "response_time_ms": 110
+  },
+  {
+    "external_log_id": "log-buyer-001-checkout",
+    "timestamp": "2026-06-23T09:00:34Z",
+    "level": "info",
+    "service_name": "order-service",
+    "trace_id": "trace-buyer-001-checkout",
+    "session_id": "session-buyer-001",
+    "user_id": "user-buyer-001",
+    "method": "POST",
+    "endpoint": "/orders",
+    "request_payload": {
+      "cart_id": "cart-buyer-001",
+      "shipping_address_id": "addr-masked-001"
+    },
+    "response_status": 201,
+    "response_body": {
+      "order_id": "order-buyer-001",
+      "status": "created",
+      "total": 1290000
+    },
+    "response_time_ms": 138
+  },
+  {
+    "external_log_id": "log-buyer-001-payment",
+    "timestamp": "2026-06-23T09:00:45Z",
+    "level": "info",
+    "service_name": "payment-service",
+    "trace_id": "trace-buyer-001-payment",
+    "session_id": "session-buyer-001",
+    "user_id": "user-buyer-001",
+    "method": "POST",
+    "endpoint": "/payments",
+    "request_payload": {
+      "order_id": "order-buyer-001",
+      "payment_method": "mock_card"
+    },
+    "response_status": 200,
+    "response_body": {
+      "payment_id": "pay-buyer-001",
+      "status": "paid",
+      "amount": 1290000
+    },
+    "response_time_ms": 192
+  },
+  {
+    "external_log_id": "log-buyer-001-view-order",
+    "timestamp": "2026-06-23T09:01:00Z",
+    "level": "info",
+    "service_name": "order-service",
+    "trace_id": "trace-buyer-001-view-order",
+    "session_id": "session-buyer-001",
+    "user_id": "user-buyer-001",
+    "method": "GET",
+    "endpoint": "/orders/order-buyer-001",
+    "request_payload": {},
+    "response_status": 200,
+    "response_body": {
+      "order_id": "order-buyer-001",
+      "status": "paid",
+      "total": 1290000
+    },
+    "response_time_ms": 88
+  },
+  {
+    "external_log_id": "log-browser-001-login",
+    "timestamp": "2026-06-23T09:05:00Z",
+    "level": "info",
+    "service_name": "auth-service",
+    "trace_id": "trace-browser-001-login",
+    "session_id": "session-browser-001",
+    "user_id": "user-browser-001",
+    "method": "POST",
+    "endpoint": "/auth/login",
+    "request_payload": {
+      "username": "browser_001",
+      "password": "***MASKED***"
+    },
+    "response_status": 200,
+    "response_body": {
+      "user_id": "user-browser-001",
+      "role": "customer",
+      "token": "***MASKED***"
+    },
+    "response_time_ms": 79
+  },
+  {
+    "external_log_id": "log-browser-001-search",
+    "timestamp": "2026-06-23T09:05:09Z",
+    "level": "info",
+    "service_name": "product-service",
+    "trace_id": "trace-browser-001-search",
+    "session_id": "session-browser-001",
+    "user_id": "user-browser-001",
+    "method": "GET",
+    "endpoint": "/products?query=keyboard",
+    "request_payload": {},
+    "response_status": 200,
+    "response_body": {
+      "items": [
+        {"product_id": "prod-keyboard-001", "name": "Mechanical Keyboard", "price": 890000},
+        {"product_id": "prod-keyboard-002", "name": "Compact Keyboard", "price": 650000}
+      ],
+      "total": 2
+    },
+    "response_time_ms": 101
+  },
+  {
+    "external_log_id": "log-browser-001-view-keyboard",
+    "timestamp": "2026-06-23T09:05:19Z",
+    "level": "info",
+    "service_name": "product-service",
+    "trace_id": "trace-browser-001-view-keyboard",
+    "session_id": "session-browser-001",
+    "user_id": "user-browser-001",
+    "method": "GET",
+    "endpoint": "/products/prod-keyboard-001",
+    "request_payload": {},
+    "response_status": 200,
+    "response_body": {
+      "product_id": "prod-keyboard-001",
+      "name": "Mechanical Keyboard",
+      "price": 890000,
+      "stock": 22
+    },
+    "response_time_ms": 74
+  },
+  {
+    "external_log_id": "log-browser-001-view-compact-keyboard",
+    "timestamp": "2026-06-23T09:05:31Z",
+    "level": "info",
+    "service_name": "product-service",
+    "trace_id": "trace-browser-001-view-compact-keyboard",
+    "session_id": "session-browser-001",
+    "user_id": "user-browser-001",
+    "method": "GET",
+    "endpoint": "/products/prod-keyboard-002",
+    "request_payload": {},
+    "response_status": 200,
+    "response_body": {
+      "product_id": "prod-keyboard-002",
+      "name": "Compact Keyboard",
+      "price": 650000,
+      "stock": 15
+    },
+    "response_time_ms": 69
+  },
+  {
+    "external_log_id": "log-failed-payment-001-login",
+    "timestamp": "2026-06-23T09:10:00Z",
+    "level": "info",
+    "service_name": "auth-service",
+    "trace_id": "trace-failed-payment-001-login",
+    "session_id": "session-failed-payment-001",
+    "user_id": "user-failed-payment-001",
+    "method": "POST",
+    "endpoint": "/auth/login",
+    "request_payload": {
+      "username": "failed_payment_001",
+      "password": "***MASKED***"
+    },
+    "response_status": 200,
+    "response_body": {
+      "user_id": "user-failed-payment-001",
+      "role": "customer",
+      "token": "***MASKED***"
+    },
+    "response_time_ms": 83
+  },
+  {
+    "external_log_id": "log-failed-payment-001-view-product",
+    "timestamp": "2026-06-23T09:10:10Z",
+    "level": "info",
+    "service_name": "product-service",
+    "trace_id": "trace-failed-payment-001-view-product",
+    "session_id": "session-failed-payment-001",
+    "user_id": "user-failed-payment-001",
+    "method": "GET",
+    "endpoint": "/products/prod-speaker-001",
+    "request_payload": {},
+    "response_status": 200,
+    "response_body": {
+      "product_id": "prod-speaker-001",
+      "name": "Bluetooth Speaker",
+      "price": 720000,
+      "stock": 9
+    },
+    "response_time_ms": 77
+  },
+  {
+    "external_log_id": "log-failed-payment-001-add-cart",
+    "timestamp": "2026-06-23T09:10:22Z",
+    "level": "info",
+    "service_name": "order-service",
+    "trace_id": "trace-failed-payment-001-add-cart",
+    "session_id": "session-failed-payment-001",
+    "user_id": "user-failed-payment-001",
+    "method": "POST",
+    "endpoint": "/cart/items",
+    "request_payload": {
+      "product_id": "prod-speaker-001",
+      "quantity": 1
+    },
+    "response_status": 201,
+    "response_body": {
+      "cart_id": "cart-failed-payment-001",
+      "item_count": 1,
+      "subtotal": 720000
+    },
+    "response_time_ms": 118
+  },
+  {
+    "external_log_id": "log-failed-payment-001-checkout",
+    "timestamp": "2026-06-23T09:10:34Z",
+    "level": "info",
+    "service_name": "order-service",
+    "trace_id": "trace-failed-payment-001-checkout",
+    "session_id": "session-failed-payment-001",
+    "user_id": "user-failed-payment-001",
+    "method": "POST",
+    "endpoint": "/orders",
+    "request_payload": {
+      "cart_id": "cart-failed-payment-001",
+      "shipping_address_id": "addr-masked-002"
+    },
+    "response_status": 201,
+    "response_body": {
+      "order_id": "order-failed-payment-001",
+      "status": "created",
+      "total": 720000
+    },
+    "response_time_ms": 141
+  },
+  {
+    "external_log_id": "log-failed-payment-001-payment",
+    "timestamp": "2026-06-23T09:10:48Z",
+    "level": "warn",
+    "service_name": "payment-service",
+    "trace_id": "trace-failed-payment-001-payment",
+    "session_id": "session-failed-payment-001",
+    "user_id": "user-failed-payment-001",
+    "method": "POST",
+    "endpoint": "/payments",
+    "request_payload": {
+      "order_id": "order-failed-payment-001",
+      "payment_method": "mock_declined_card"
+    },
+    "response_status": 402,
+    "response_body": {
+      "payment_id": "pay-failed-payment-001",
+      "status": "declined",
+      "reason": "insufficient_funds"
+    },
+    "response_time_ms": 205
+  }
+]
