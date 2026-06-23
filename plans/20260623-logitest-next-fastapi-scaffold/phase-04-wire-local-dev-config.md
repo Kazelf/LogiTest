@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Wire local development config"
-status: pending
+status: completed
 priority: P2
 effort: "30m"
 dependencies: [phase-02, phase-03]
@@ -55,11 +55,10 @@ Keep each app self-contained for now. Frontend uses npm inside `apps/web`; backe
 
 ## Success Criteria
 
-- [ ] README gives correct run commands for both apps.
-- [ ] Environment variable names are documented.
-- [ ] No Express wording is reintroduced.
+- [x] README gives correct run commands for both apps.
+- [x] Environment variable names are documented.
+- [x] No Express wording is reintroduced.
 
 ## Risk Assessment
 
 Low risk. Biggest risk is prematurely adding workspace tooling. Keep this phase focused on documentation and env examples.
-

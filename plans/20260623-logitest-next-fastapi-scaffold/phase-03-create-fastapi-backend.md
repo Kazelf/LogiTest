@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Create FastAPI backend app"
-status: pending
+status: completed
 priority: P1
 effort: "45m"
 dependencies: [phase-01]
@@ -112,12 +112,11 @@ FastAPI app entrypoint is `app/main.py`. Domain modules live under `app/modules`
 
 ## Success Criteria
 
-- [ ] `apps/api/app/main.py` exists.
-- [ ] `apps/api/requirements.txt` exists.
-- [ ] `GET http://localhost:8000/health` returns `{ "status": "ok" }`.
-- [ ] `pytest` passes for the health endpoint.
+- [x] `apps/api/app/main.py` exists.
+- [x] `apps/api/requirements.txt` exists.
+- [x] `GET http://localhost:8000/health` returns `{ "status": "ok" }`.
+- [x] `pytest` passes for the health endpoint.
 
 ## Risk Assessment
 
 Medium risk because local Python launcher names differ. If `py` is unavailable, use `python -m venv .venv` or the project-approved Python executable.
-

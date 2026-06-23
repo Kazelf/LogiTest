@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Normalize tech stack docs"
-status: pending
+status: completed
 priority: P1
 effort: "15m"
 dependencies: []
@@ -42,9 +42,9 @@ This is documentation alignment only. The backend architecture remains FastAPI m
 
 ## Success Criteria
 
-- [ ] `rg -n "Express|express|Supertest" D:\ViettelDigitalTalent\LogiTest\docs D:\ViettelDigitalTalent\LogiTest\logitest-ai\README.md -g "*.md"` returns no stale backend app references.
-- [ ] README says `apps/api` is Python FastAPI.
-- [ ] Tech stack docs align with FastAPI backend testing.
+- [x] `rg -n "Express|express|Supertest" D:\ViettelDigitalTalent\LogiTest\docs D:\ViettelDigitalTalent\LogiTest\logitest-ai\README.md -g "*.md"` returns no stale backend app references.
+- [x] README says `apps/api` is Python FastAPI.
+- [x] Tech stack docs align with FastAPI backend testing.
 
 ## Risk Assessment
 

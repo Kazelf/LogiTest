@@ -1,6 +1,6 @@
 ---
 title: "Task 1.2 and 1.3: Scaffold LogiTest AI Next.js frontend and FastAPI backend"
-status: pending
+status: completed
 created: 2026-06-23
 scope: project
 source: skill:plan
@@ -9,19 +9,19 @@ blocks: []
 phases:
   - id: phase-01
     title: "Normalize tech stack docs"
-    status: pending
+    status: completed
   - id: phase-02
     title: "Create Next.js frontend app"
-    status: pending
+    status: completed
   - id: phase-03
     title: "Create FastAPI backend app"
-    status: pending
+    status: completed
   - id: phase-04
     title: "Wire local development config"
-    status: pending
+    status: completed
   - id: phase-05
     title: "Verify scaffold"
-    status: pending
+    status: completed
 ---
 
 # Task 1.2 and 1.3 Plan
@@ -103,4 +103,3 @@ Run phases in order. Phase 1 removes stack ambiguity first. Phase 2 and Phase 3 
 - `create-next-app` may fail if `apps/web` is non-empty. Mitigation: inspect folder before running, remove only generated empty placeholder files if confirmed safe.
 - Python environment may vary across machines. Mitigation: use `.venv` inside `apps/api` and record activation commands.
 - README and docs can drift again. Mitigation: keep README wording generic but explicit: `Python FastAPI backend API organized as a modular monolith`.
-

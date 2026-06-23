@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Verify scaffold"
-status: pending
+status: completed
 priority: P1
 effort: "30m"
 dependencies: [phase-02, phase-03, phase-04]
@@ -61,10 +61,10 @@ No architecture changes. This phase validates the scaffold produced by previous 
 
 ## Success Criteria
 
-- [ ] `npm run build` succeeds for frontend.
-- [ ] `pytest` succeeds for backend.
-- [ ] `/health` returns status `ok`.
-- [ ] No stale Express/Supertest wording remains in project docs for LogiTest AI backend.
+- [x] `npm run build` succeeds for frontend.
+- [x] `pytest` succeeds for backend.
+- [x] `/health` returns status `ok`.
+- [x] No stale Express/Supertest wording remains in project docs for LogiTest AI backend.
 
 ## Risk Assessment
 

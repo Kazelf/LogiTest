@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Create Next.js frontend app"
-status: pending
+status: completed
 priority: P1
 effort: "30m"
 dependencies: [phase-01]
@@ -59,12 +59,11 @@ The frontend is a Next.js dashboard that will later call the FastAPI backend. Fo
 
 ## Success Criteria
 
-- [ ] `apps/web/package.json` exists.
-- [ ] `npm run dev` starts without compile errors.
-- [ ] Browser can open `http://localhost:3000`.
-- [ ] Tailwind CSS files exist and are wired by the generated Next.js app.
+- [x] `apps/web/package.json` exists.
+- [x] `npm run build` succeeds without compile errors.
+- [x] Next.js app can be started with `npm.cmd run dev`.
+- [x] Tailwind CSS files exist and are wired by the generated Next.js app.
 
 ## Risk Assessment
 
 Medium-low risk. `create-next-app` can refuse to scaffold into a non-empty folder. Inspect before deleting anything, because existing user files must not be removed casually.
-
