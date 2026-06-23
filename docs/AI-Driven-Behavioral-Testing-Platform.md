@@ -108,10 +108,10 @@ Sau khi hệ thống học được các chuỗi hành vi từ log, các chuỗi
 Hệ thống có thể sinh ra:
 
 - Mã kiểm thử **Playwright** để mô phỏng hành vi người dùng trên giao diện CMS hoặc Mobile Web.
-- Kịch bản kiểm thử API bằng các framework như:
-  - **Jest**
-  - **Mocha**
-  - **Supertest**
+- Kịch bản kiểm thử API bằng các framework/công cụ phù hợp với FastAPI như:
+  - **pytest**
+  - **requests**
+  - **httpx**
   - Các công cụ API testing tương đương.
 
 Script Generator cần đảm bảo:
@@ -218,9 +218,9 @@ Các giá trị chính bao gồm:
 | Thành phần | Công nghệ đề xuất |
 |---|---|
 | Log Storage | ELK Stack, Elasticsearch |
-| Backend Service | Node.js, Express.js, NestJS hoặc Java Spring Boot |
+| Backend Service | Python FastAPI |
 | AI Engine | Python, Scikit-learn, LangChain, OpenAI API hoặc local LLM |
-| Test Automation | Playwright, Jest, Mocha, Supertest |
+| Test Automation | Playwright, pytest, requests / httpx |
 | Database | PostgreSQL, MongoDB hoặc Elasticsearch index |
 | Report Dashboard | React, Next.js hoặc Grafana |
 | Deployment | Docker, Docker Compose, Kubernetes |
