@@ -1,0 +1,18 @@
+{
+  "name": "demo-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Express e-commerce modular monolith used as the LogiTest AI demo system under test.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.4"
+  }
+}

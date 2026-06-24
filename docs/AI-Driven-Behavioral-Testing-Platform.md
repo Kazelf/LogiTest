@@ -9,225 +9,242 @@
 
 ## 2. Mô tả đề tài
 
-Trong các hệ thống **Microservices** hiện đại, việc duy trì các bộ kịch bản kiểm thử hồi quy (**Regression Testing**) thủ công tiêu tốn rất nhiều nguồn lực. Các kịch bản kiểm thử được viết thủ công thường khó bao quát đầy đủ những tình huống thực tế, đặc biệt là các **edge cases** phát sinh từ hành vi người dùng trên môi trường **Production**.
+LogiTest AI là nền tảng demo tự động phân tích log API từ hành vi người dùng, tái dựng user journey, sinh API regression test, chạy lại test trên môi trường local/staging, rồi so sánh kết quả với Golden Response để phát hiện lỗi hồi quy.
 
-Đề tài này đề xuất xây dựng một nền tảng tự động hóa kiểm thử sử dụng **AI** để học từ dữ liệu log thực tế trong cụm **ELK Stack**. Từ các log này, hệ thống có thể phân tích hành vi người dùng, tự động sinh ra và thực thi các kịch bản kiểm thử thông qua **Playwright** hoặc **API calls**.
-
-Mục tiêu của hệ thống là mô phỏng chính xác các luồng thao tác thực tế của người dùng trên **CMS** hoặc **Mobile App**, từ đó phát hiện sớm các lỗi hồi quy hoặc sai khác trong quá trình phát triển phần mềm.
+Sau góp ý của mentor, MVP không cần chứng minh bằng microservices thật. Bản demo ưu tiên một hệ thống nghiệp vụ **E-commerce Modular Monolith** dễ chạy, dễ bảo vệ, nhưng vẫn đủ hành vi backend quan trọng: login, search, cart/order, API chaining và optional payment callback.
 
 ---
 
-## 3. Mục tiêu chính
+## 3. Định hướng MVP mới
 
-- Tự động thu thập và phân tích dữ liệu log từ hệ thống thực tế.
-- Xâu chuỗi hành vi người dùng dựa trên `trace_id`, `session_id` hoặc các thông tin định danh tương đương.
-- Phân tích trình tự thao tác của người dùng bằng các kỹ thuật AI như **Sequence Mining** hoặc **Large Language Models**.
-- Phân loại các nhóm người dùng khác nhau dựa trên hành vi thực tế.
-- Tự động sinh kịch bản kiểm thử Backend hoặc End-to-End.
-- Thực thi kiểm thử trên môi trường **Staging** hoặc **UAT**.
-- So sánh kết quả kiểm thử với dữ liệu chuẩn từ log, còn gọi là **Golden Response**.
-- Hỗ trợ phát hiện lỗi hồi quy trong hệ thống Microservices.
-
----
-
-## 4. Phạm vi hệ thống
-
-Hệ thống tập trung vào việc tự động hóa kiểm thử dựa trên hành vi người dùng thực tế, bao gồm các thành phần chính sau:
-
-1. **Data Ingestion**  
-   Thu thập dữ liệu log từ Elasticsearch.
-
-2. **Behavioral Modeling**  
-   Phân tích và mô hình hóa hành vi người dùng bằng AI.
-
-3. **Script Generator**  
-   Sinh mã kiểm thử tự động bằng Playwright hoặc API testing framework.
-
-4. **Execution & Reporting**  
-   Chạy test, so sánh kết quả và sinh báo cáo kiểm thử.
-
----
-
-## 5. Yêu cầu chức năng
-
-### 5.1. Data Ingestion - ELK Integration
-
-Hệ thống cần có khả năng kết nối với **Elasticsearch** để trích xuất dữ liệu log từ cụm **ELK Stack**.
-
-Các loại log cần thu thập bao gồm:
-
-- **Access Logs**
-- **Application Logs**
-
-Các thông tin quan trọng cần tập trung phân tích:
-
-| Thông tin | Mô tả |
-|---|---|
-| API Endpoint | Đường dẫn API được người dùng hoặc hệ thống gọi |
-| Request Payload | Dữ liệu gửi lên trong request |
-| Response Code | Mã trạng thái phản hồi của API |
-| trace_id | Mã định danh dùng để theo dõi một luồng xử lý |
-| session_id | Mã phiên làm việc của người dùng |
-
-Mục tiêu của bước này là thu thập đủ dữ liệu để có thể xâu chuỗi các thao tác của người dùng thành một hành trình hoàn chỉnh.
-
----
-
-### 5.2. AI Engine - Behavioral Modeling
-
-Hệ thống sử dụng AI để phân tích trình tự các thao tác của người dùng dựa trên dữ liệu log đã thu thập.
-
-Các kỹ thuật có thể được sử dụng:
-
-- **Sequence Mining**
-- **Pattern Recognition**
-- **Clustering**
-- **Large Language Models**
-
-AI Engine cần thực hiện các nhiệm vụ sau:
-
-- Phát hiện các chuỗi thao tác phổ biến của người dùng.
-- Nhận diện các luồng hành vi bất thường hoặc edge cases.
-- Gom nhóm các hành vi tương tự nhau.
-- Phân loại người dùng thành các **User Persona** khác nhau.
-
-Ví dụ về các User Persona:
-
-| User Persona | Mô tả |
-|---|---|
-| Admin quản trị nội dung | Người dùng thực hiện các thao tác tạo, sửa, xóa và quản lý nội dung |
-| User mua hàng | Người dùng thực hiện tìm kiếm sản phẩm, thêm vào giỏ hàng và thanh toán |
-| User tra cứu | Người dùng chủ yếu thực hiện tìm kiếm, xem thông tin hoặc tra cứu dữ liệu |
-
----
-
-### 5.3. Script Generator - Playwright / Automated Suite
-
-Sau khi hệ thống học được các chuỗi hành vi từ log, các chuỗi này sẽ được chuyển đổi thành kịch bản kiểm thử tự động.
-
-Hệ thống có thể sinh ra:
-
-- Mã kiểm thử **Playwright** để mô phỏng hành vi người dùng trên giao diện CMS hoặc Mobile Web.
-- Kịch bản kiểm thử API bằng các framework/công cụ phù hợp với FastAPI như:
-  - **pytest**
-  - **requests**
-  - **httpx**
-  - Các công cụ API testing tương đương.
-
-Script Generator cần đảm bảo:
-
-- Giữ đúng thứ tự thao tác của người dùng.
-- Tái tạo được request payload quan trọng.
-- Có khả năng thay thế dữ liệu nhạy cảm bằng dữ liệu mock hoặc dữ liệu test.
-- Có thể sinh test case theo từng persona hoặc từng luồng nghiệp vụ.
-- Có thể tái sử dụng các đoạn script phổ biến.
-
----
-
-### 5.4. Execution & Reporting
-
-Hệ thống cần có khả năng thực thi các kịch bản kiểm thử đã sinh trên các môi trường kiểm thử như:
-
-- **Staging**
-- **UAT**
-
-Sau khi thực thi, hệ thống sẽ so sánh kết quả trả về với **Golden Response**, tức là dữ liệu phản hồi chuẩn được lấy từ log thực tế.
-
-Các tiêu chí so sánh bao gồm:
-
-| Tiêu chí | Mô tả |
-|---|---|
-| Response Code | So sánh mã trạng thái HTTP |
-| Response Body | So sánh dữ liệu trả về |
-| Schema | Kiểm tra cấu trúc response |
-| Business Data | Kiểm tra các trường dữ liệu nghiệp vụ quan trọng |
-| Response Time | So sánh thời gian phản hồi với ngưỡng cho phép |
-
-Kết quả kiểm thử cần được tổng hợp thành báo cáo, bao gồm:
-
-- Số lượng test case đã chạy.
-- Số lượng test case thành công.
-- Số lượng test case thất bại.
-- Danh sách lỗi hoặc sai khác phát hiện được.
-- Mức độ nghiêm trọng của từng lỗi.
-- Thông tin trace hoặc session liên quan đến lỗi.
-
----
-
-## 6. Kiến trúc tổng quan đề xuất
+MVP tập trung vào pipeline có thể demo end-to-end:
 
 ```text
-Production System
-      |
-      v
-ELK Stack / Elasticsearch
-      |
-      v
-Data Ingestion Service
-      |
-      v
-Behavioral Modeling AI Engine
-      |
-      v
-User Journey / Persona Detection
-      |
-      v
-Script Generator
-      |
-      v
-Playwright / API Test Suite
-      |
-      v
-Staging / UAT Environment
-      |
-      v
-Execution Report / Regression Detection
+Postman / demo script
+        |
+        v
+Express E-commerce Demo Backend
+        |
+        | structured API logs
+        v
+Elasticsearch local
+        |
+        v
+FastAPI LogiTest AI Platform
+        |
+        v
+Journey detection + chaining detection
+        |
+        v
+Jest + Supertest API test generation
+        |
+        v
+Test execution + Golden Response comparison
+        |
+        v
+Next.js dashboard + regression report
+```
+
+Mock JSON logs vẫn được giữ làm fallback để tránh hỏng demo nếu Elasticsearch hoặc Docker gặp lỗi.
+
+---
+
+## 4. Mục tiêu chính
+
+- Thu thập hoặc import structured API logs từ Elasticsearch local.
+- Chuẩn hóa log và lưu vào PostgreSQL.
+- Gom log theo `session_id`, `trace_id`, `request_id`.
+- Nhận diện user journey như `LOGIN_FLOW`, `SEARCH_FLOW`, `ORDER_CREATION_FLOW`.
+- Phát hiện API chaining, ví dụ `POST /api/orders` trả `orderId`, sau đó `GET /api/orders/:id` dùng lại `orderId`.
+- Sinh API regression test bằng **Jest + Supertest**.
+- Chạy test trên demo backend local/staging.
+- So sánh status code, response schema, business fields và response time với Golden Response.
+- Hiển thị raw logs, detected journeys, generated tests, execution result và regression report trên dashboard.
+
+---
+
+## 5. Phạm vi MVP
+
+### 5.1. Must-have
+
+- Demo e-commerce backend bằng Node.js + Express.js theo Modular Monolith.
+- API: login, search product, product detail, cart, create order, get order detail.
+- Structured logging middleware có `session_id`, `trace_id`, `request_id`.
+- Elasticsearch local làm nguồn log chính.
+- Mock JSON import làm fallback.
+- FastAPI platform xử lý ingestion, normalize, journey analysis, test generation, execution/report.
+- PostgreSQL lưu logs, journeys, generated tests và test runs.
+- Jest + Supertest là output test chính.
+- Next.js dashboard trình bày pipeline demo.
+
+### 5.2. Future work
+
+- Playwright UI/E2E test generation.
+- Persona detection nâng cao.
+- LLM-based explanation hoặc LLM-based generation tự do.
+- Async callback/payment notification mức 4 nếu còn thời gian.
+- CI/CD auto-run test.
+- Kubernetes.
+- Tách hệ thống demo thành microservices thật.
+
+---
+
+## 6. Demo system cần test
+
+Demo system nên là e-commerce mini vì hội đồng dễ hiểu và đủ hành vi backend:
+
+| Mức | Hành vi | API minh họa | Mục đích |
+|---|---|---|---|
+| 1 | Login | `POST /api/auth/login` | Chứng minh request/response/status/session |
+| 2 | Search | `GET /api/products?keyword=...` | Chứng minh truy vấn và biến thể input |
+| 3 | Create order | `GET /api/cart` -> `POST /api/orders` -> `GET /api/orders/:id` | Chứng minh API chaining |
+| 4 | Payment callback | `POST /api/payments` -> `POST /api/payment-callback` | Optional, chứng minh async/callback |
+
+Trong MVP, mức 1-3 là bắt buộc. Mức 4 là bonus.
+
+---
+
+## 7. Module chính của LogiTest AI
+
+### 7.1. Data Ingestion
+
+- Query log từ Elasticsearch theo index/time range.
+- Import fallback từ `mock-data/logs.json`.
+- Normalize log về schema chung.
+- Mask dữ liệu nhạy cảm như password, token, email, phone.
+- Lưu log vào PostgreSQL.
+
+### 7.2. Journey Analyzer
+
+- Group logs theo `session_id` hoặc `trace_id`.
+- Sort theo timestamp.
+- Classify journey type bằng rule-based detection.
+- Detect output-input chaining.
+- Lưu journey JSON để sinh test.
+
+### 7.3. Test Generator
+
+- Nhận journey JSON.
+- Sinh test case và artifact Jest + Supertest.
+- Giữ đúng thứ tự request.
+- Extract biến từ response trước và inject vào request sau.
+- Assert status code, schema, business fields và response time threshold.
+
+### 7.4. Execution & Reporting
+
+- Chạy generated test hoặc persisted JSON steps against demo backend.
+- Lưu actual response và diff result.
+- So sánh với Golden Response.
+- Không so sánh full response body mặc định vì các field động như `id`, `createdAt`, `token`, `orderCode` dễ làm test fail giả.
+
+### 7.5. Dashboard
+
+Dashboard cần hiển thị:
+
+- Raw Logs
+- Sessions
+- Detected Journeys
+- Journey Detail
+- Generated Test Cases
+- Test Script Viewer
+- Execution Results
+- Regression Report
+
+---
+
+## 8. Kiến trúc triển khai demo
+
+```text
+logitest-ai/
+  demo-system/        Express e-commerce modular monolith
+  apps/api/           FastAPI LogiTest AI modular monolith
+  apps/web/           Next.js dashboard
+  packages/shared/    Shared TypeScript schemas
+  mock-data/          JSON fallback logs
+  database/           PostgreSQL migrations
+  generated-tests/    Generated Jest/Supertest artifacts
+  docker-compose.yml  Local demo stack
+```
+
+Docker Compose mục tiêu:
+
+```text
+services:
+  database
+  elasticsearch
+  demo-backend
+  api
+  web
+```
+
+Kibana có thể thêm nếu máy chạy ổn, nhưng không bắt buộc cho MVP.
+
+---
+
+## 9. Golden Response
+
+Golden Response là response chuẩn lấy từ log đã học được. Khi chạy lại test trên local/staging, LogiTest AI so sánh actual response với Golden Response theo thứ tự ưu tiên:
+
+1. Status code.
+2. Response schema.
+3. Business fields ổn định.
+4. Response time threshold.
+5. Full body chỉ dùng cho response thật sự ổn định.
+
+Ví dụ regression:
+
+```text
+Golden: POST /api/orders -> status = "created"
+Actual: POST /api/orders -> status = "pending"
+Result: Regression detected
 ```
 
 ---
 
-## 7. Kết quả đầu ra mong đợi
+## 10. Kịch bản demo bảo vệ
 
-Hệ thống sau khi hoàn thiện có thể tạo ra các kết quả sau:
-
-- Danh sách các luồng hành vi người dùng được phát hiện từ log.
-- Danh sách User Persona dựa trên dữ liệu thực tế.
-- Bộ test case tự động sinh từ hành vi người dùng.
-- Mã nguồn kiểm thử bằng Playwright hoặc API testing framework.
-- Báo cáo kết quả kiểm thử trên môi trường Staging/UAT.
-- Danh sách lỗi hồi quy hoặc sai khác so với Golden Response.
-
----
-
-## 8. Giá trị của đề tài
-
-Đề tài giúp giảm sự phụ thuộc vào việc viết test case thủ công và tăng khả năng bao phủ kiểm thử dựa trên dữ liệu thực tế.
-
-Các giá trị chính bao gồm:
-
-- Giảm chi phí duy trì Regression Test Suite.
-- Tăng khả năng phát hiện lỗi phát sinh từ hành vi thực tế của người dùng.
-- Tự động cập nhật kịch bản kiểm thử khi hành vi người dùng thay đổi.
-- Hỗ trợ tốt cho hệ thống Microservices có nhiều API và nhiều luồng nghiệp vụ phức tạp.
-- Cải thiện chất lượng phần mềm trước khi triển khai lên Production.
+1. Chạy Docker Compose.
+2. Chạy Postman collection hoặc demo script để tạo log.
+3. Mở dashboard Raw Logs để chứng minh log đã vào Elasticsearch/platform.
+4. Bấm Analyze Journey.
+5. Hiển thị `LOGIN_FLOW`, `SEARCH_FLOW`, `ORDER_CREATION_FLOW`.
+6. Mở Journey Detail và chỉ ra `orderId` chaining.
+7. Bấm Generate Test.
+8. Hiển thị Jest + Supertest code.
+9. Bấm Run Test.
+10. Hiển thị pass.
+11. Bật regression mode ở demo backend.
+12. Run lại test.
+13. Hiển thị fail và regression report.
 
 ---
 
-## 9. Công nghệ đề xuất
+## 11. Công nghệ đề xuất
 
-| Thành phần | Công nghệ đề xuất |
-|---|---|
-| Log Storage | ELK Stack, Elasticsearch |
-| Backend Service | Python FastAPI |
-| AI Engine | Python, Scikit-learn, LangChain, OpenAI API hoặc local LLM |
-| Test Automation | Playwright, pytest, requests / httpx |
-| Database | PostgreSQL, MongoDB hoặc Elasticsearch index |
-| Report Dashboard | React, Next.js hoặc Grafana |
-| Deployment | Docker, Docker Compose, Kubernetes |
-| CI/CD | GitHub Actions, GitLab CI hoặc Jenkins |
+| Thành phần | Công nghệ MVP | Ghi chú |
+|---|---|---|
+| Demo Business System | Node.js + Express.js | Modular Monolith, dễ sinh log |
+| LogiTest AI Backend | Python + FastAPI | Modular Monolith cho ingestion/analyzer/generator/report |
+| Dashboard | Next.js + Tailwind CSS | Operational dashboard |
+| Log Storage | Elasticsearch local | Primary source |
+| Fallback Source | JSON sample logs | Dự phòng khi demo |
+| Database | PostgreSQL | Lưu logs, journeys, generated tests, reports |
+| Test Generation | Jest + Supertest | Primary output |
+| Optional E2E | Playwright | Future work |
+| Deployment | Docker Compose | Đủ cho demo local |
 
 ---
 
-## 10. Ghi chú
+## 12. Ghi chú bảo mật dữ liệu
 
-Hệ thống cần xử lý cẩn thận các dữ liệu nhạy cảm trong log, đặc biệt là thông tin cá nhân, token, mật khẩu, email, số điện thoại hoặc dữ liệu giao dịch. Trước khi sử dụng log để sinh test case, hệ thống nên có bước **masking** hoặc **anonymization** để đảm bảo an toàn dữ liệu.
+Log cần được mask trước khi lưu hoặc sinh test. Các field phải xử lý cẩn thận:
+
+- `password`
+- `token`
+- `authorization`
+- `email`
+- `phone`
+- thông tin thanh toán
+- thông tin định danh cá nhân
+
+MVP chỉ dùng dữ liệu demo/seed, nhưng vẫn phải thể hiện rõ tư duy masking để bảo vệ đề tài.
