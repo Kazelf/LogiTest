@@ -69,6 +69,45 @@ List mined personas:
 Invoke-RestMethod "http://localhost:8000/api/behavior/personas?limit=5"
 ```
 
+## Test Generation API
+
+Generate and persist an API test case from a mined journey. Use a journey `id` returned by `/api/behavior/journeys`. If `frameworks` is omitted, the API renders `playwright_api` by default.
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/api/test-generation/generate `
+  -ContentType "application/json" `
+  -Body '{"journey_id":"<journey-id>","overwrite":true}'
+```
+
+Generate Playwright API, Jest/Supertest, and Mocha/Supertest artifacts in one request. Set `write_files` to `true` to write files under `generated-tests/`:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/api/test-generation/generate `
+  -ContentType "application/json" `
+  -Body '{"journey_id":"<journey-id>","overwrite":true,"frameworks":["playwright_api","jest_supertest","mocha_supertest"],"write_files":true}'
+```
+
+Generated scripts are stored as artifacts. This task generates code only; it does not install or execute Playwright, Jest, Mocha, Supertest, or Chai.
+
+List generated test cases:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/api/test-generation/test-cases?limit=5&status=generated"
+```
+
+Fetch one generated test case with JSON steps, assertions, golden response, generated code mirror, and artifacts:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/api/test-generation/test-cases/<test-case-id>"
+```
+
+Fetch generated script artifacts:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/api/test-generation/test-cases/<test-case-id>/artifacts"
+Invoke-RestMethod "http://localhost:8000/api/test-generation/test-cases/<test-case-id>/artifacts/playwright_api"
+```
+
 Optional local smoke order:
 
 ```powershell
@@ -76,6 +115,10 @@ Invoke-RestMethod -Method Post http://localhost:8000/api/logs/import-mock
 Invoke-RestMethod -Method Post http://localhost:8000/api/behavior/analyze
 Invoke-RestMethod "http://localhost:8000/api/behavior/journeys?limit=5"
 Invoke-RestMethod "http://localhost:8000/api/behavior/personas?limit=5"
+Invoke-RestMethod -Method Post http://localhost:8000/api/test-generation/generate `
+  -ContentType "application/json" `
+  -Body '{"journey_id":"<journey-id>","overwrite":true,"frameworks":["playwright_api","jest_supertest","mocha_supertest"],"write_files":true}'
+Invoke-RestMethod "http://localhost:8000/api/test-generation/test-cases?limit=5"
 ```
 
 Before the live API smoke test, start the database and apply the migration from the monorepo root:

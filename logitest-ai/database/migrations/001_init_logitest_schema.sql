@@ -95,6 +95,18 @@ CREATE TABLE IF NOT EXISTS test_cases (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS test_case_artifacts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    test_case_id UUID NOT NULL REFERENCES test_cases(id) ON DELETE CASCADE,
+    framework TEXT NOT NULL,
+    language TEXT NOT NULL DEFAULT 'typescript',
+    file_path TEXT,
+    code TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (test_case_id, framework)
+);
+
 CREATE TABLE IF NOT EXISTS test_runs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     test_case_id UUID NOT NULL REFERENCES test_cases(id) ON DELETE CASCADE,
@@ -120,5 +132,6 @@ CREATE INDEX IF NOT EXISTS idx_sessions_external_session_id ON sessions(external
 CREATE INDEX IF NOT EXISTS idx_journeys_persona_id ON journeys(persona_id);
 CREATE INDEX IF NOT EXISTS idx_test_cases_journey_id ON test_cases(journey_id);
 CREATE INDEX IF NOT EXISTS idx_test_cases_status ON test_cases(status);
+CREATE INDEX IF NOT EXISTS idx_test_case_artifacts_test_case_id ON test_case_artifacts(test_case_id);
 CREATE INDEX IF NOT EXISTS idx_test_runs_test_case_id ON test_runs(test_case_id);
 CREATE INDEX IF NOT EXISTS idx_test_runs_status_created_at ON test_runs(status, created_at);

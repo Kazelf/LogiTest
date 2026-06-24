@@ -22,6 +22,8 @@ ALTER TABLE logs ADD COLUMN IF NOT EXISTS action_type TEXT NOT NULL DEFAULT 'unk
 CREATE INDEX IF NOT EXISTS idx_logs_action_type ON logs(action_type);
 ```
 
+If your local database was created before generated script artifacts existed, re-apply the migration or create `test_case_artifacts` from `database/migrations/001_init_logitest_schema.sql`.
+
 ## Inspect Tables
 
 ```powershell
@@ -36,4 +38,5 @@ docker compose exec database psql -U logitest -d logitest_ai -c "SELECT COUNT(*)
 docker compose exec database psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM personas;"
 docker compose exec database psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM journeys;"
 docker compose exec database psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM test_cases;"
+docker compose exec database psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM test_case_artifacts;"
 ```
