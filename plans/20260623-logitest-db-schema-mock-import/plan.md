@@ -1,11 +1,11 @@
----
+﻿---
 title: "Task 2.2-2.4: Initialize database schema, mock logs, and import script"
 status: in-progress
 created: 2026-06-23
 scope: project
 source: skill:plan
 blockedBy: [20260623-logitest-shared-docker-compose]
-blocks: []
+blocks: [20260623-logitest-api-logs-import-list, 20260624-logitest-session-group-detail-api, 20260624-logitest-session-reconstruction-action-classifier]
 phases:
   - id: phase-01
     title: "Create SQL schema migration"
@@ -138,3 +138,4 @@ postgresql://logitest:logitest@localhost:5432/logitest_ai
 - Phase 2 completed: mock JSON dataset was created and parses successfully.
 - Phase 3 completed: import script was created, `psycopg[binary]` was added, and the script's load/group flow was verified.
 - Phase 4 is in progress: Docker CLI is available, but Docker Desktop daemon is not running, so live PostgreSQL migration/import verification is blocked until the daemon starts.
+
