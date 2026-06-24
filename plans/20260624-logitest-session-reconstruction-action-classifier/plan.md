@@ -1,7 +1,7 @@
 ﻿---
 title: "Task 4.1-4.3: Session reconstruction services and persisted action classifier"
 description: "Add backend services to group logs by session, sort logs chronologically, classify action types with rules, and persist action_type on logs."
-status: pending
+status: completed
 priority: P2
 effort: 6h
 branch: master
@@ -14,16 +14,16 @@ source: skill:plan
 phases:
   - id: phase-01
     title: "Add action_type database field"
-    status: pending
+    status: completed
   - id: phase-02
     title: "Implement session reconstruction domain services"
-    status: pending
+    status: completed
   - id: phase-03
     title: "Persist classified actions during import"
-    status: pending
+    status: completed
   - id: phase-04
     title: "Verify classifier and reconstruction behavior"
-    status: pending
+    status: completed
 ---
 
 # Task 4.1-4.3 Plan
@@ -112,10 +112,15 @@ Only `action_type` is persisted in this task. `confidence` and `signals` stay in
 
 | Phase | Name | Status |
 |---|---|---|
-| 1 | [Add action_type database field](./phase-01-add-action-type-database-field.md) | Pending |
-| 2 | [Implement session reconstruction domain services](./phase-02-implement-session-reconstruction-domain-services.md) | Pending |
-| 3 | [Persist classified actions during import](./phase-03-persist-classified-actions-during-import.md) | Pending |
-| 4 | [Verify classifier and reconstruction behavior](./phase-04-verify-classifier-and-reconstruction-behavior.md) | Pending |
+| 1 | [Add action_type database field](./phase-01-add-action-type-database-field.md) | Completed |
+| 2 | [Implement session reconstruction domain services](./phase-02-implement-session-reconstruction-domain-services.md) | Completed |
+| 3 | [Persist classified actions during import](./phase-03-persist-classified-actions-during-import.md) | Completed |
+| 4 | [Verify classifier and reconstruction behavior](./phase-04-verify-classifier-and-reconstruction-behavior.md) | Completed |
+
+## Verification
+
+- `python -m py_compile app\modules\session_reconstruction\service.py ..\..\scripts\import_mock_logs.py` passed from `apps/api`.
+- `python -m pytest` passed from `apps/api`: 22 passed, 1 existing Starlette/httpx deprecation warning.
 
 ## Acceptance Criteria
 

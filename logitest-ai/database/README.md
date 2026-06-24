@@ -15,6 +15,13 @@ docker compose up -d database
 Get-Content .\database\migrations\001_init_logitest_schema.sql | docker compose exec -T database psql -U logitest -d logitest_ai
 ```
 
+If your local database was created before `logs.action_type` existed, reset the local MVP database or apply the equivalent manual update:
+
+```sql
+ALTER TABLE logs ADD COLUMN IF NOT EXISTS action_type TEXT NOT NULL DEFAULT 'unknown';
+CREATE INDEX IF NOT EXISTS idx_logs_action_type ON logs(action_type);
+```
+
 ## Inspect Tables
 
 ```powershell

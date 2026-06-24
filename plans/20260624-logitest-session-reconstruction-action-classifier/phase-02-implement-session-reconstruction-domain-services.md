@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Implement session reconstruction domain services"
-status: pending
+status: completed
 priority: P2
 effort: "2h"
 dependencies: [phase-01]
@@ -52,10 +52,10 @@ classify_logs(logs: list[dict[str, Any]]) -> list[dict[str, Any]]
 
 ## Success Criteria
 
-- [ ] Grouping preserves logs and uses `"unknown"` for missing session IDs.
-- [ ] Sorting handles `timestamp`, `occurred_at`, datetime values, and invalid values.
-- [ ] Classifier returns expected action type for all mock ecommerce flow endpoints.
-- [ ] Service tests run without PostgreSQL.
+- [x] Grouping preserves logs and uses `"unknown"` for missing session IDs.
+- [x] Sorting handles `timestamp`, `occurred_at`, datetime values, and invalid values.
+- [x] Classifier returns expected action type for all mock ecommerce flow endpoints.
+- [x] Service tests run without PostgreSQL.
 
 ## Risk Assessment
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections import defaultdict
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -12,6 +12,12 @@ from psycopg.types.json import Jsonb
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+API_APP_PATH = PROJECT_ROOT / "apps" / "api"
+if str(API_APP_PATH) not in sys.path:
+    sys.path.insert(0, str(API_APP_PATH))
+
+from app.modules.session_reconstruction import classify_action, group_logs_by_session, sort_logs_by_timestamp
+
 MOCK_LOGS_PATH = PROJECT_ROOT / "mock-data" / "logs.json"
 DEFAULT_DATABASE_URL = "postgresql://logitest:logitest@localhost:5432/logitest_ai"
 
@@ -71,14 +77,8 @@ def get_database_url() -> str:
 
 
 def group_by_session(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    sessions: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for record in records:
-        sessions[record["session_id"]].append(record)
-
-    for session_records in sessions.values():
-        session_records.sort(key=lambda item: parse_timestamp(item["timestamp"]))
-
-    return dict(sessions)
+    sessions = group_logs_by_session(records)
+    return {session_id: sort_logs_by_timestamp(session_records) for session_id, session_records in sessions.items()}
 
 
 def upsert_sessions(conn: psycopg.Connection, grouped_records: dict[str, list[dict[str, Any]]]) -> dict[str, str]:
@@ -148,10 +148,11 @@ def upsert_logs(conn: psycopg.Connection, records: list[dict[str, Any]], session
                     request_payload,
                     response_body,
                     response_time_ms,
+                    action_type,
                     raw_log,
                     occurred_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (external_log_id) DO UPDATE SET
                     session_id = EXCLUDED.session_id,
                     trace_id = EXCLUDED.trace_id,
@@ -164,6 +165,7 @@ def upsert_logs(conn: psycopg.Connection, records: list[dict[str, Any]], session
                     request_payload = EXCLUDED.request_payload,
                     response_body = EXCLUDED.response_body,
                     response_time_ms = EXCLUDED.response_time_ms,
+                    action_type = EXCLUDED.action_type,
                     raw_log = EXCLUDED.raw_log,
                     occurred_at = EXCLUDED.occurred_at
                 """,
@@ -180,6 +182,7 @@ def upsert_logs(conn: psycopg.Connection, records: list[dict[str, Any]], session
                     Jsonb(record["request_payload"]),
                     Jsonb(record["response_body"]),
                     record["response_time_ms"],
+                    classify_action(record).action_type,
                     Jsonb(record),
                     parse_timestamp(record["timestamp"]),
                 ),

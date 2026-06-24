@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Persist classified actions during import"
-status: pending
+status: completed
 priority: P2
 effort: "2h"
 dependencies: [phase-01, phase-02]
@@ -40,10 +40,10 @@ The API service currently loads `scripts/import_mock_logs.py` dynamically. Updat
 
 ## Success Criteria
 
-- [ ] Mock import writes non-unknown action types for known ecommerce records.
-- [ ] Conflict updates refresh `action_type` if rules change and import is re-run.
-- [ ] API import endpoint contract remains unchanged.
-- [ ] Existing import summary tests still pass.
+- [x] Mock import writes non-unknown action types for known ecommerce records.
+- [x] Conflict updates refresh `action_type` if rules change and import is re-run.
+- [x] API import endpoint contract remains unchanged.
+- [x] Existing import summary tests still pass.
 
 ## Risk Assessment
 

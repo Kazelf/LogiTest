@@ -49,6 +49,35 @@ Fetch one session with ordered log details:
 Invoke-RestMethod "http://localhost:8000/api/logs/sessions/session-buyer-001"
 ```
 
+## Behavior API
+
+Run behavior analysis from imported logs. This mines personas and journeys from existing `logs.action_type` values and upserts results into PostgreSQL:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/api/behavior/analyze
+```
+
+List mined journeys:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/api/behavior/journeys?limit=5"
+```
+
+List mined personas:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/api/behavior/personas?limit=5"
+```
+
+Optional local smoke order:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/api/logs/import-mock
+Invoke-RestMethod -Method Post http://localhost:8000/api/behavior/analyze
+Invoke-RestMethod "http://localhost:8000/api/behavior/journeys?limit=5"
+Invoke-RestMethod "http://localhost:8000/api/behavior/personas?limit=5"
+```
+
 Before the live API smoke test, start the database and apply the migration from the monorepo root:
 
 ```powershell

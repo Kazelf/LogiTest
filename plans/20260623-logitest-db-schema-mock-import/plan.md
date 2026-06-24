@@ -5,7 +5,7 @@ created: 2026-06-23
 scope: project
 source: skill:plan
 blockedBy: [20260623-logitest-shared-docker-compose]
-blocks: [20260623-logitest-api-logs-import-list, 20260624-logitest-session-group-detail-api, 20260624-logitest-session-reconstruction-action-classifier]
+blocks: [20260623-logitest-api-logs-import-list, 20260624-logitest-session-group-detail-api, 20260624-logitest-session-reconstruction-action-classifier, 20260624-logitest-behavior-analysis-journey-persona-api]
 phases:
   - id: phase-01
     title: "Create SQL schema migration"

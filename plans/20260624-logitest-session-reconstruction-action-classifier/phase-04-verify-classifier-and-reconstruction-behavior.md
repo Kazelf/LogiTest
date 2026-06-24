@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Verify classifier and reconstruction behavior"
-status: pending
+status: completed
 priority: P2
 effort: "1h"
 dependencies: [phase-02, phase-03]
@@ -39,11 +39,11 @@ Use pure unit tests for reconstruction/classifier logic and monkeypatch/fake cur
 
 ## Success Criteria
 
-- [ ] `python -m pytest` passes in `apps/api`.
-- [ ] Tests prove missing session IDs group under `"unknown"`.
-- [ ] Tests prove invalid timestamps sort last.
-- [ ] Tests prove classifier rule precedence for search vs product detail and payment success vs payment failure.
-- [ ] Documentation or plan notes mention that API exposure is intentionally deferred.
+- [x] `python -m pytest` passes in `apps/api`.
+- [x] Tests prove missing session IDs group under `"unknown"`.
+- [x] Tests prove invalid timestamps sort last.
+- [x] Tests prove classifier rule precedence for search vs product detail and payment success vs payment failure.
+- [x] Documentation or plan notes mention that API exposure is intentionally deferred.
 
 ## Risk Assessment
 

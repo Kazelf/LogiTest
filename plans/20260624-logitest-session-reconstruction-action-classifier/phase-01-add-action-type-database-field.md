@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Add action_type database field"
-status: pending
+status: completed
 priority: P2
 effort: "1h"
 dependencies: []
@@ -38,9 +38,9 @@ The project currently uses a single SQL migration file instead of Alembic. Updat
 
 ## Success Criteria
 
-- [ ] Fresh schema creation includes the `action_type` column.
-- [ ] Fresh schema creation includes `idx_logs_action_type`.
-- [ ] No API response model includes `action_type` yet.
+- [x] Fresh schema creation includes the `action_type` column.
+- [x] Fresh schema creation includes `idx_logs_action_type`.
+- [x] No API response model includes `action_type` yet.
 
 ## Risk Assessment
 

@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS logs (
     request_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
     response_body JSONB NOT NULL DEFAULT '{}'::jsonb,
     response_time_ms INTEGER,
+    action_type TEXT NOT NULL DEFAULT 'unknown',
     raw_log JSONB NOT NULL DEFAULT '{}'::jsonb,
     occurred_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -113,6 +114,7 @@ CREATE INDEX IF NOT EXISTS idx_logs_session_occurred_at ON logs(session_id, occu
 CREATE INDEX IF NOT EXISTS idx_logs_trace_id ON logs(trace_id);
 CREATE INDEX IF NOT EXISTS idx_logs_endpoint ON logs(endpoint);
 CREATE INDEX IF NOT EXISTS idx_logs_occurred_at ON logs(occurred_at);
+CREATE INDEX IF NOT EXISTS idx_logs_action_type ON logs(action_type);
 CREATE INDEX IF NOT EXISTS idx_logs_raw_log_gin ON logs USING GIN(raw_log);
 CREATE INDEX IF NOT EXISTS idx_sessions_external_session_id ON sessions(external_session_id);
 CREATE INDEX IF NOT EXISTS idx_journeys_persona_id ON journeys(persona_id);
