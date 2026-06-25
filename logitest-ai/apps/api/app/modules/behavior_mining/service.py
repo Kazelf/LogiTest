@@ -10,16 +10,34 @@ from psycopg.types.json import Jsonb
 from app.db import connection
 from app.modules.behavior_mining.schemas import JourneyFilters, PersonaFilters
 from app.modules.session_reconstruction import (
+    ACTION_ADD_TO_CART,
+    ACTION_LOGIN,
     ACTION_CHECKOUT,
     ACTION_PAYMENT_FAILED,
     ACTION_PAYMENT_SUCCESS,
     ACTION_SEARCH_PRODUCT,
     ACTION_UNKNOWN,
+    ACTION_VIEW_ORDER,
     ACTION_VIEW_PRODUCT,
 )
 
 ANALYSIS_METHOD = "rule_based"
 ANALYSIS_SOURCE = "logs"
+JOURNEY_ASYNC_PAYMENT_FLOW = "ASYNC_PAYMENT_FLOW"
+JOURNEY_LOGIN_FLOW = "LOGIN_FLOW"
+JOURNEY_ORDER_CREATION_FLOW = "ORDER_CREATION_FLOW"
+JOURNEY_SEARCH_FLOW = "SEARCH_FLOW"
+JOURNEY_UNKNOWN_FLOW = "UNKNOWN_FLOW"
+CHAINING_FIELD_NAMES = {
+    "cartId",
+    "cart_id",
+    "orderId",
+    "order_id",
+    "productId",
+    "product_id",
+    "userId",
+    "user_id",
+}
 
 
 @dataclass(frozen=True)
@@ -35,6 +53,7 @@ class JourneyDraft:
     name: str
     description: str
     persona_name: str
+    journey_type: str
     source_session_count: int
     frequency_score: float
     risk_score: float
@@ -178,16 +197,18 @@ def _build_journey_drafts(session_groups: dict[str, list[dict[str, Any]]]) -> li
         steps = examples[0]["steps"]
         action_types = _action_set(steps)
         persona = _detect_persona(action_types)
+        journey_type = _detect_journey_type(action_types)
         source_session_count = len(examples)
         drafts.append(
             JourneyDraft(
-                name=_build_journey_name(signature),
-                description=f"Mined from {source_session_count} session(s).",
+                name=_build_journey_name(journey_type, signature),
+                description=f"{journey_type} mined from {source_session_count} session(s).",
                 persona_name=persona.name,
+                journey_type=journey_type,
                 source_session_count=source_session_count,
                 frequency_score=round(source_session_count / total_sessions, 4),
                 risk_score=_calculate_risk_score(action_types),
-                steps=steps,
+                steps=_apply_journey_type(steps, journey_type),
                 example_session_id=str(examples[0]["session_id"]) if examples[0].get("session_id") else None,
             )
         )
@@ -196,7 +217,7 @@ def _build_journey_drafts(session_groups: dict[str, list[dict[str, Any]]]) -> li
 
 
 def _build_steps(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [
+    steps = [
         {
             "order": index + 1,
             "action_type": record.get("action_type") or ACTION_UNKNOWN,
@@ -204,9 +225,84 @@ def _build_steps(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "endpoint": record.get("endpoint"),
             "expected_status": record.get("status_code"),
             "response_time_ms": record.get("response_time_ms"),
+            "request_payload": record.get("request_payload") or {},
+            "response_body": record.get("response_body") or {},
         }
         for index, record in enumerate(records)
     ]
+    annotated_steps = _annotate_chaining(steps)
+    for step in annotated_steps:
+        step.pop("request_payload", None)
+        step.pop("response_body", None)
+    return annotated_steps
+
+def _detect_journey_type(action_types: set[str]) -> str:
+    if {ACTION_PAYMENT_FAILED, ACTION_PAYMENT_SUCCESS} & action_types:
+        return JOURNEY_ASYNC_PAYMENT_FLOW
+    if {ACTION_ADD_TO_CART, ACTION_CHECKOUT, ACTION_VIEW_ORDER} & action_types:
+        return JOURNEY_ORDER_CREATION_FLOW
+    if {ACTION_SEARCH_PRODUCT, ACTION_VIEW_PRODUCT} & action_types:
+        return JOURNEY_SEARCH_FLOW
+    if ACTION_LOGIN in action_types:
+        return JOURNEY_LOGIN_FLOW
+    return JOURNEY_UNKNOWN_FLOW
+
+def _apply_journey_type(steps: list[dict[str, Any]], journey_type: str) -> list[dict[str, Any]]:
+    return [{**step, "type": journey_type, "journey_type": journey_type} for step in steps]
+
+def _annotate_chaining(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    extracted: list[dict[str, Any]] = []
+
+    for step_index, step in enumerate(steps):
+        for field_name, field_value, path in _iter_stable_response_fields(step.get("response_body") or {}):
+            if field_value in (None, "", [], {}):
+                continue
+            token = {
+                "step_index": step_index,
+                "field_name": field_name,
+                "field_value": field_value,
+                "path": path,
+            }
+            extracted.append(token)
+            step.setdefault("extract", {})[field_name] = path
+
+    for token in extracted:
+        for later_step in steps[token["step_index"] + 1 :]:
+            use_location = _find_value_use(later_step, token["field_value"])
+            if use_location is None:
+                continue
+            later_step.setdefault("uses", {})[token["field_name"]] = use_location
+
+    return steps
+
+def _iter_stable_response_fields(value: Any, path: str = "response.body") -> list[tuple[str, Any, str]]:
+    fields: list[tuple[str, Any, str]] = []
+    if isinstance(value, dict):
+        for key, entry_value in value.items():
+            entry_path = f"{path}.{key}"
+            if key in CHAINING_FIELD_NAMES:
+                fields.append((key, entry_value, entry_path))
+            fields.extend(_iter_stable_response_fields(entry_value, entry_path))
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            fields.extend(_iter_stable_response_fields(item, f"{path}[{index}]"))
+    return fields
+
+def _find_value_use(step: dict[str, Any], value: Any) -> str | None:
+    value_text = str(value)
+    endpoint = str(step.get("endpoint") or "")
+    if value_text and value_text in endpoint:
+        return "path"
+    if _contains_value(step.get("request_payload") or {}, value):
+        return "request.body"
+    return None
+
+def _contains_value(candidate: Any, expected: Any) -> bool:
+    if isinstance(candidate, dict):
+        return any(_contains_value(value, expected) for value in candidate.values())
+    if isinstance(candidate, list):
+        return any(_contains_value(value, expected) for value in candidate)
+    return candidate == expected or str(candidate) == str(expected)
 
 
 def _detect_persona(action_types: set[str]) -> PersonaSpec:
@@ -249,8 +345,8 @@ def _build_journey_signature(steps: list[dict[str, Any]]) -> str:
     return " > ".join(str(step.get("action_type") or ACTION_UNKNOWN) for step in steps)
 
 
-def _build_journey_name(signature: str) -> str:
-    return f"Journey: {signature}"
+def _build_journey_name(journey_type: str, signature: str) -> str:
+    return f"Journey: {journey_type} - {signature}"
 
 
 def _calculate_risk_score(action_types: set[str]) -> float:
@@ -381,6 +477,8 @@ _FETCH_LOG_ROWS_SQL = """
         logs.method,
         logs.endpoint,
         logs.status_code,
+        logs.request_payload,
+        logs.response_body,
         logs.response_time_ms,
         logs.action_type,
         logs.occurred_at

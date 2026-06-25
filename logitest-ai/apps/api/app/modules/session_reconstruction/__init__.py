@@ -15,6 +15,7 @@ from app.modules.session_reconstruction.service import (
     classify_action,
     classify_logs,
     group_logs_by_session,
+    normalize_endpoint_path,
     sort_logs_by_timestamp,
 )
 
@@ -33,5 +34,6 @@ __all__ = [
     "classify_action",
     "classify_logs",
     "group_logs_by_session",
+    "normalize_endpoint_path",
     "sort_logs_by_timestamp",
 ]

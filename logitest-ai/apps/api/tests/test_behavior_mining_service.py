@@ -100,6 +100,7 @@ def test_upsert_helpers_write_personas_and_journeys() -> None:
         name="Journey: login > payment_success",
         description="Mined from 1 session(s).",
         persona_name="Buyer",
+        journey_type=service.JOURNEY_ASYNC_PAYMENT_FLOW,
         source_session_count=1,
         frequency_score=1.0,
         risk_score=0.62,
@@ -117,14 +118,79 @@ def test_upsert_helpers_write_personas_and_journeys() -> None:
     assert cursor.executions[1][1][0] == "persona-id"
 
 
-def _row(session_id: str, action_type: str, order: int) -> dict:
+def test_detect_journey_type_prioritizes_demo_flows() -> None:
+    assert service._detect_journey_type({"login"}) == service.JOURNEY_LOGIN_FLOW
+    assert service._detect_journey_type({"login", "search_product"}) == service.JOURNEY_SEARCH_FLOW
+    assert service._detect_journey_type({"login", "search_product", "checkout"}) == service.JOURNEY_ORDER_CREATION_FLOW
+    assert service._detect_journey_type({"checkout", "payment_success"}) == service.JOURNEY_ASYNC_PAYMENT_FLOW
+
+def test_build_journey_drafts_adds_flow_type_to_steps() -> None:
+    drafts = service._build_journey_drafts(
+        {
+            "session-login": [_row("db-session-login", "login", 1)],
+            "session-search": [
+                _row("db-session-search", "login", 1),
+                _row("db-session-search", "search_product", 2),
+            ],
+            "session-order": [
+                _row("db-session-order", "login", 1),
+                _row("db-session-order", "checkout", 2),
+            ],
+        }
+    )
+
+    flow_types = {draft.journey_type for draft in drafts}
+    assert service.JOURNEY_LOGIN_FLOW in flow_types
+    assert service.JOURNEY_SEARCH_FLOW in flow_types
+    assert service.JOURNEY_ORDER_CREATION_FLOW in flow_types
+    assert all(step["type"] == draft.journey_type for draft in drafts for step in draft.steps)
+
+def test_build_steps_extracts_and_uses_order_id_chaining() -> None:
+    steps = service._build_steps(
+        [
+            _row(
+                "db-session-order",
+                "checkout",
+                1,
+                method="POST",
+                endpoint="/api/orders",
+                response_body={"orderId": "order-123", "status": "created"},
+                status_code=201,
+            ),
+            _row(
+                "db-session-order",
+                "view_order",
+                2,
+                method="GET",
+                endpoint="/api/orders/order-123",
+                request_payload={"orderId": "order-123"},
+            ),
+        ]
+    )
+
+    assert steps[0]["extract"] == {"orderId": "response.body.orderId"}
+    assert steps[1]["uses"] == {"orderId": "path"}
+
+def _row(
+    session_id: str,
+    action_type: str,
+    order: int,
+    *,
+    method: str = "GET",
+    endpoint: str | None = None,
+    request_payload: dict | None = None,
+    response_body: dict | None = None,
+    status_code: int = 200,
+) -> dict:
     return {
         "session_id": session_id,
-        "method": "GET",
-        "endpoint": f"/step/{order}",
-        "status_code": 200,
+        "method": method,
+        "endpoint": endpoint or f"/step/{order}",
+        "status_code": status_code,
         "response_time_ms": 50,
         "action_type": action_type,
+        "request_payload": request_payload or {},
+        "response_body": response_body or {},
     }
 
 
