@@ -38,13 +38,20 @@ services:
     environment:
       API_PORT: 8000
       DATABASE_URL: postgresql://logitest:logitest@database:5432/logitest_ai
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      DEMO_LOG_INDEX: logitest-demo-logs
     ports:
       - "8000:8000"
     volumes:
       - ./apps/api:/app
+      - ./scripts:/app/scripts
+      - ./mock-data:/app/mock-data
+      - ./generated-tests:/app/generated-tests
     depends_on:
       database:
         condition: service_healthy
+      elasticsearch:
+        condition: service_started
 
   demo-backend:
     build:

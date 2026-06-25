@@ -68,7 +68,7 @@ The intended defense demo flow is:
 Implemented foundation:
 
 - `apps/web`: Next.js app scaffold.
-- `apps/api`: FastAPI app scaffold and current backend modules.
+- `apps/api`: FastAPI app scaffold with mock JSON and Elasticsearch log ingestion.
 - `demo-system`: Express e-commerce modular monolith with login, product, cart, order, payment, request context, structured console logging, and optional Elasticsearch indexing.
 - `packages/shared`: shared TypeScript/Zod schema package.
 - `database/migrations/001_init_logitest_schema.sql`: PostgreSQL schema for sessions, logs, journeys, test cases, artifacts, and runs.
@@ -77,7 +77,6 @@ Implemented foundation:
 
 Planned next components:
 
-- Elasticsearch import endpoint.
 - Journey chaining metadata.
 - Jest + Supertest as default generated artifact.
 - Execution/reporting against the demo backend.

@@ -1,6 +1,9 @@
 ﻿from __future__ import annotations
 
 import importlib.util
+import hashlib
+import re
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
@@ -8,17 +11,39 @@ from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
+from app.core.settings import settings
 from app.db import connection
-from app.modules.ingestion.schemas import LogFilters, SessionFilters
+from app.modules.ingestion import elasticsearch_client
+from app.modules.ingestion.schemas import ImportElasticsearchLogsRequest, LogFilters, SessionFilters
+from app.modules.session_reconstruction import classify_action, group_logs_by_session, sort_logs_by_timestamp
 
-PROJECT_ROOT = Path(__file__).resolve().parents[5]
+def _find_project_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "scripts" / "import_mock_logs.py").exists():
+            return parent
+    return Path(__file__).resolve().parents[3]
+
+PROJECT_ROOT = _find_project_root()
 IMPORT_SCRIPT_PATH = PROJECT_ROOT / "scripts" / "import_mock_logs.py"
 MOCK_LOGS_SOURCE = "mock-data/logs.json"
 
 
 class SessionNotFoundError(Exception):
     pass
+
+SENSITIVE_KEYS = {
+    "authorization",
+    "password",
+    "token",
+    "access_token",
+    "refresh_token",
+    "accesstoken",
+    "refreshtoken",
+    "email",
+    "phone",
+}
 
 
 @lru_cache(maxsize=1)
@@ -49,6 +74,32 @@ def import_mock_logs_from_dataset() -> dict[str, Any]:
     return {
         "source": MOCK_LOGS_SOURCE,
         "loaded_records": len(records),
+        "sessions": len(grouped_records),
+        "counts": counts,
+    }
+
+def import_elasticsearch_logs(request: ImportElasticsearchLogsRequest) -> dict[str, Any]:
+    index = request.index or settings.demo_log_index
+    hits = elasticsearch_client.search_logs(
+        index=index,
+        start_time=request.start_time,
+        end_time=request.end_time,
+        limit=request.limit,
+    )
+    records = [_normalize_elasticsearch_hit(hit, index=index) for hit in hits]
+    grouped_records = _group_normalized_records(records)
+
+    with connection.connect() as conn:
+        session_ids = _upsert_elasticsearch_sessions(conn, grouped_records, index=index)
+        _upsert_elasticsearch_logs(conn, records, session_ids, index=index)
+        counts = _fetch_ingestion_counts(conn)
+        conn.commit()
+
+    return {
+        "source": "elasticsearch",
+        "index": index,
+        "loaded_records": len(hits),
+        "imported_logs": len(records),
         "sessions": len(grouped_records),
         "counts": counts,
     }
@@ -215,6 +266,256 @@ def get_session_detail(external_session_id: str) -> dict[str, Any]:
         "logs": [_serialize_session_detail_log_row(row) for row in log_rows],
     }
 
+
+def _normalize_elasticsearch_hit(hit: dict[str, Any], *, index: str) -> dict[str, Any]:
+    source = hit.get("_source") or {}
+    if not isinstance(source, dict):
+        source = {}
+
+    masked_source = mask_sensitive(source)
+    timestamp = str(masked_source.get("timestamp") or datetime.now(timezone.utc).isoformat())
+    response_status = masked_source.get("response_status", masked_source.get("status_code"))
+    endpoint = masked_source.get("endpoint")
+    external_log_id = _build_external_log_id(hit=hit, source=masked_source, index=index)
+
+    return {
+        "external_log_id": external_log_id,
+        "timestamp": timestamp,
+        "level": masked_source.get("level") or ("error" if _as_int(response_status, 0) >= 500 else "info"),
+        "service_name": masked_source.get("service_name") or "demo-ecommerce",
+        "trace_id": masked_source.get("trace_id"),
+        "session_id": masked_source.get("session_id") or "unknown-session",
+        "request_id": masked_source.get("request_id"),
+        "user_id": masked_source.get("user_id"),
+        "method": masked_source.get("method"),
+        "endpoint": endpoint,
+        "normalized_endpoint": normalize_endpoint(endpoint),
+        "request_headers": masked_source.get("request_headers") or {},
+        "request_payload": masked_source.get("request_payload") or {},
+        "response_status": _as_int(response_status, None),
+        "response_body": masked_source.get("response_body") or {},
+        "response_time_ms": _as_int(masked_source.get("response_time_ms"), None),
+        "environment": masked_source.get("environment"),
+        "source_index": index,
+        "raw_log": {
+            **masked_source,
+            "_elasticsearch": {
+                "id": hit.get("_id"),
+                "index": hit.get("_index") or index,
+            },
+        },
+    }
+
+def _build_external_log_id(*, hit: dict[str, Any], source: dict[str, Any], index: str) -> str:
+    external_log_id = source.get("external_log_id")
+    if external_log_id:
+        return str(external_log_id)
+
+    hit_id = hit.get("_id")
+    if hit_id:
+        return f"es:{index}:{hit_id}"
+
+    fingerprint_source = {
+        "timestamp": source.get("timestamp"),
+        "session_id": source.get("session_id"),
+        "request_id": source.get("request_id"),
+        "method": source.get("method"),
+        "endpoint": source.get("endpoint"),
+    }
+    fingerprint = hashlib.sha256(repr(sorted(fingerprint_source.items())).encode("utf-8")).hexdigest()
+    return f"es:{index}:{fingerprint[:24]}"
+
+def _group_normalized_records(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    sessions = group_logs_by_session(records)
+    return {session_id: sort_logs_by_timestamp(session_records) for session_id, session_records in sessions.items()}
+
+def _upsert_elasticsearch_sessions(
+    conn: psycopg.Connection,
+    grouped_records: dict[str, list[dict[str, Any]]],
+    *,
+    index: str,
+) -> dict[str, str]:
+    session_ids: dict[str, str] = {}
+
+    with conn.cursor() as cur:
+        for external_session_id, records in grouped_records.items():
+            timestamps = [parse_timestamp(record["timestamp"]) for record in records]
+            user_ids = [record.get("user_id") for record in records if record.get("user_id")]
+            user_id = user_ids[0] if user_ids else None
+            metadata = {
+                "source_index": index,
+                "services": sorted({record["service_name"] for record in records}),
+            }
+
+            cur.execute(
+                """
+                INSERT INTO sessions (
+                    external_session_id,
+                    user_id,
+                    started_at,
+                    ended_at,
+                    request_count,
+                    source,
+                    metadata
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (external_session_id) DO UPDATE SET
+                    user_id = EXCLUDED.user_id,
+                    started_at = EXCLUDED.started_at,
+                    ended_at = EXCLUDED.ended_at,
+                    request_count = EXCLUDED.request_count,
+                    source = EXCLUDED.source,
+                    metadata = EXCLUDED.metadata
+                RETURNING id
+                """,
+                (
+                    external_session_id,
+                    user_id,
+                    min(timestamps),
+                    max(timestamps),
+                    len(records),
+                    "elasticsearch",
+                    Jsonb(metadata),
+                ),
+            )
+            session_ids[external_session_id] = str(cur.fetchone()[0])
+
+    return session_ids
+
+def _upsert_elasticsearch_logs(
+    conn: psycopg.Connection,
+    records: list[dict[str, Any]],
+    session_ids: dict[str, str],
+    *,
+    index: str,
+) -> None:
+    with conn.cursor() as cur:
+        for record in records:
+            cur.execute(
+                """
+                INSERT INTO logs (
+                    session_id,
+                    external_log_id,
+                    trace_id,
+                    request_id,
+                    user_id,
+                    service_name,
+                    level,
+                    method,
+                    endpoint,
+                    normalized_endpoint,
+                    status_code,
+                    request_headers,
+                    request_payload,
+                    response_body,
+                    response_time_ms,
+                    environment,
+                    source_index,
+                    action_type,
+                    raw_log,
+                    occurred_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (external_log_id) DO UPDATE SET
+                    session_id = EXCLUDED.session_id,
+                    trace_id = EXCLUDED.trace_id,
+                    request_id = EXCLUDED.request_id,
+                    user_id = EXCLUDED.user_id,
+                    service_name = EXCLUDED.service_name,
+                    level = EXCLUDED.level,
+                    method = EXCLUDED.method,
+                    endpoint = EXCLUDED.endpoint,
+                    normalized_endpoint = EXCLUDED.normalized_endpoint,
+                    status_code = EXCLUDED.status_code,
+                    request_headers = EXCLUDED.request_headers,
+                    request_payload = EXCLUDED.request_payload,
+                    response_body = EXCLUDED.response_body,
+                    response_time_ms = EXCLUDED.response_time_ms,
+                    environment = EXCLUDED.environment,
+                    source_index = EXCLUDED.source_index,
+                    action_type = EXCLUDED.action_type,
+                    raw_log = EXCLUDED.raw_log,
+                    occurred_at = EXCLUDED.occurred_at
+                """,
+                (
+                    session_ids[record["session_id"]],
+                    record["external_log_id"],
+                    record["trace_id"],
+                    record["request_id"],
+                    record["user_id"],
+                    record["service_name"],
+                    record["level"],
+                    record["method"],
+                    record["endpoint"],
+                    record["normalized_endpoint"],
+                    record["response_status"],
+                    Jsonb(record["request_headers"]),
+                    Jsonb(record["request_payload"]),
+                    Jsonb(record["response_body"]),
+                    record["response_time_ms"],
+                    record["environment"],
+                    index,
+                    classify_action(record).action_type,
+                    Jsonb(record["raw_log"]),
+                    parse_timestamp(record["timestamp"]),
+                ),
+            )
+
+def mask_sensitive(value: Any) -> Any:
+    if isinstance(value, list):
+        return [mask_sensitive(item) for item in value]
+
+    if isinstance(value, dict):
+        return {
+            key: "***MASKED***" if key.lower() in SENSITIVE_KEYS else mask_sensitive(entry_value)
+            for key, entry_value in value.items()
+        }
+
+    return value
+
+def normalize_endpoint(endpoint: Any) -> str | None:
+    if not endpoint:
+        return None
+
+    path = str(endpoint).split("?", 1)[0]
+    segments = []
+    for segment in path.split("/"):
+        if _looks_dynamic_path_segment(segment):
+            segments.append(":id")
+        else:
+            segments.append(segment)
+    return "/".join(segments)
+
+def parse_timestamp(value: str) -> datetime:
+    normalized = value.replace("Z", "+00:00")
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+def _looks_dynamic_path_segment(segment: str) -> bool:
+    if not segment:
+        return False
+    return bool(
+        re.fullmatch(r"[0-9a-f]{8,}(-[0-9a-f]{4,})*", segment)
+        or re.fullmatch(r"(order|prod|cart|pay|user)-[a-z0-9-]+", segment)
+    )
+
+def _as_int(value: Any, default: int | None) -> int | None:
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+def _fetch_ingestion_counts(conn: psycopg.Connection) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    with conn.cursor() as cur:
+        for table in ["sessions", "logs"]:
+            cur.execute(f"SELECT COUNT(*) FROM {table}")
+            counts[table] = int(cur.fetchone()[0])
+    return counts
 
 def _build_log_filters(filters: LogFilters) -> tuple[str, list[Any]]:
     clauses: list[str] = []
