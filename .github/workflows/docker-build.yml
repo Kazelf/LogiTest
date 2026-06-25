@@ -1,0 +1,32 @@
+name: Docker Build Validation
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  docker-build:
+    name: Docker compose and image builds
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: logitest-ai
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose config
+        run: docker compose config
+
+      - name: Build FastAPI image
+        run: docker build -f apps/api/Dockerfile apps/api
+
+      - name: Build Next.js image
+        run: docker build -f apps/web/Dockerfile .
+
+      - name: Build demo backend image
+        run: docker build -f demo-system/Dockerfile .
