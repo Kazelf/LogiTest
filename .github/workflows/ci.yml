@@ -33,6 +33,14 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Install frontend Linux native bindings
+        run: npm install --no-save --no-package-lock --workspace web lightningcss-linux-x64-gnu@1.32.0
+
+      - name: Rebuild frontend native modules
+        run: |
+          npm rebuild --workspace web
+          npm rebuild --workspace web lightningcss || true
+
       - name: Build shared package
         run: npm run build:shared
 
