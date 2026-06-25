@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Add Elasticsearch logging path and Compose services"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: ["phase-02"]
@@ -56,10 +56,9 @@ Minimum log document:
 ## Related Code Files
 
 - Modify: `logitest-ai/docker-compose.yml`
-- Modify: `logitest-ai/.env.example`
-- Modify: `logitest-ai/demo-system/src/middlewares/request-context.middleware.js`
 - Modify: `logitest-ai/demo-system/src/middlewares/logging.middleware.js`
 - Modify: `logitest-ai/demo-system/src/shared/logger.js`
+- Add: `logitest-ai/demo-system/tests/logger.test.js`
 
 ## Implementation Steps
 
@@ -73,12 +72,17 @@ Minimum log document:
 
 ## Success Criteria
 
-- [ ] `docker compose config` is valid.
-- [ ] Demo backend can run with Elasticsearch unavailable and still return API responses.
+- [x] `docker compose config` is valid.
+- [x] Demo backend logging failures do not break API responses.
 - [ ] With Elasticsearch available, demo requests create log documents.
-- [ ] Sensitive fields such as `password` and `token` are masked in indexed logs.
+- [x] Sensitive fields such as `password` and `token` are masked before console/Elasticsearch logging.
+
+## Validation Notes
+
+- `npm.cmd run test:demo` passed with 6/6 tests.
+- `docker compose config` passed.
+- `docker compose up --build -d elasticsearch demo-backend` could not be verified because Docker Desktop daemon was unavailable: `dockerDesktopLinuxEngine` pipe not found.
 
 ## Risk Assessment
 
 Elasticsearch can be heavy on local machines. Keep Kibana optional, document memory expectations, and preserve mock import as fallback.
-

@@ -20,7 +20,7 @@ phases:
     status: completed
   - id: phase-03
     title: "Add Elasticsearch logging path and Compose services"
-    status: pending
+    status: completed
   - id: phase-04
     title: "Import Elasticsearch logs into FastAPI platform"
     status: pending
@@ -71,8 +71,8 @@ Postman / demo script
   - `behavior_mining`: rule-based journeys/personas.
   - `test_generation`: test case persistence plus Playwright/Jest/Mocha renderers.
   - `execution` and `reports`: placeholders only.
-- Existing Docker Compose has `database`, `api`, and `web`; it does not yet include Elasticsearch or a demo backend.
-- Existing mock dataset already resembles e-commerce logs, but the project lacks a real target system that emits those logs.
+- Docker Compose has `database`, `api`, `web`, `elasticsearch`, and `demo-backend`.
+- Existing mock dataset remains available as a fallback source.
 
 ## Key Decisions
 
@@ -119,9 +119,9 @@ Postman / demo script
 
 | Phase | Name | Status |
 |---|---|---|
-| 1 | [Realign project documentation and scope](./phase-01-realign-project-documentation-and-scope.md) | Pending |
-| 2 | [Create Express e-commerce demo backend](./phase-02-create-express-ecommerce-demo-backend.md) | Pending |
-| 3 | [Add Elasticsearch logging path and Compose services](./phase-03-add-elasticsearch-logging-path-and-compose-services.md) | Pending |
+| 1 | [Realign project documentation and scope](./phase-01-realign-project-documentation-and-scope.md) | Completed |
+| 2 | [Create Express e-commerce demo backend](./phase-02-create-express-ecommerce-demo-backend.md) | Completed |
+| 3 | [Add Elasticsearch logging path and Compose services](./phase-03-add-elasticsearch-logging-path-and-compose-services.md) | Completed |
 | 4 | [Import Elasticsearch logs into FastAPI platform](./phase-04-import-elasticsearch-logs-into-fastapi-platform.md) | Pending |
 | 5 | [Refocus journey analyzer on flows and chaining](./phase-05-refocus-journey-analyzer-on-flows-and-chaining.md) | Pending |
 | 6 | [Make Jest/Supertest generation the primary output](./phase-06-make-jest-supertest-generation-the-primary-output.md) | Pending |

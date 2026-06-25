@@ -1,4 +1,4 @@
-const { maskSensitive } = require("../shared/logger");
+const { maskSensitive, writeStructuredLog } = require("../shared/logger");
 
 function loggingMiddleware() {
   return (req, res, next) => {
@@ -37,7 +37,7 @@ function loggingMiddleware() {
         response_time_ms: responseTimeMs,
       };
 
-      console.log(JSON.stringify(log));
+      void writeStructuredLog(log);
     });
 
     next();
