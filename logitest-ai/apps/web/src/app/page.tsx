@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -17,7 +18,6 @@ import {
   type TestRun,
 } from "./lib/api";
 
-const DEMO_TARGET_URL = "http://localhost:3001";
 const TABS = ["Logs", "Sessions", "Journeys", "Test Cases", "Runs", "Report"] as const;
 
 type Tab = (typeof TABS)[number];
@@ -232,16 +232,14 @@ export default function Home() {
                 disabled={Boolean(busy) || !selectedTestCaseId}
                 label="Run Test"
                 onClick={() =>
-                  runAction("Run selected test", () =>
-                    api.runTestCase(selectedTestCaseId, DEMO_TARGET_URL),
-                  )
+                  runAction("Run selected test", () => api.runTestCase(selectedTestCaseId))
                 }
               />
               <ActionButton disabled={Boolean(busy)} label="Refresh" onClick={() => runAction("Refresh", loadLists)} />
             </div>
             <p className="mt-3 text-sm text-slate-600">
               API: <span className="font-mono text-slate-900">{API_BASE_URL}</span> · Target:{" "}
-              <span className="font-mono text-slate-900">{DEMO_TARGET_URL}</span>
+              <span className="font-mono text-slate-900">configured by API</span>
             </p>
           </div>
           <div className="min-h-20 border border-slate-200 bg-slate-50 p-3 text-sm">
@@ -324,6 +322,12 @@ function Header({
           Import API logs, mine journeys, generate Jest/Supertest tests, execute against the demo backend, and inspect
           regression diffs from one operational screen.
         </p>
+        <Link
+          className="mt-3 inline-flex h-9 items-center justify-center border border-slate-900 bg-slate-950 px-3 text-sm font-medium text-white hover:bg-slate-800"
+          href="/demo"
+        >
+          Run Web Demo
+        </Link>
       </div>
       <div className="grid grid-cols-4 gap-2 text-center">
         <Metric label="Logs" value={logs} />

@@ -63,6 +63,7 @@ services:
       DEMO_BACKEND_PORT: 3001
       ELASTICSEARCH_URL: http://elasticsearch:9200
       DEMO_LOG_INDEX: logitest-demo-logs
+      DEMO_ALLOWED_ORIGIN: http://localhost:3000
       REGRESSION_MODE: "false"
     ports:
       - "3001:3001"
@@ -81,6 +82,7 @@ services:
     environment:
       NODE_ENV: development
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      NEXT_PUBLIC_DEMO_API_BASE_URL: http://localhost:3001
     ports:
       - "3000:3000"
     volumes:

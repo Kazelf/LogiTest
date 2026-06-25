@@ -214,11 +214,11 @@ export const api = {
     }),
   getTestCase: (testCaseId: string) =>
     request<TestCaseDetail>(`/api/test-generation/test-cases/${testCaseId}`),
-  runTestCase: (testCaseId: string, targetBaseUrl: string) =>
+  runTestCase: (testCaseId: string, targetBaseUrl?: string) =>
     request<TestRun>(`/api/execution/test-cases/${testCaseId}/run`, {
       method: "POST",
       body: JSON.stringify({
-        target_base_url: targetBaseUrl,
+        ...(targetBaseUrl ? { target_base_url: targetBaseUrl } : {}),
         target_environment: "demo",
         timeout_seconds: 10,
       }),
