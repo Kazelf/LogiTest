@@ -12,6 +12,28 @@ from app.modules.test_generation.schemas import GeneratedTestCaseFilters, Genera
 GENERATED_BY = "test_generation_service"
 TEST_CASE_STATUS_GENERATED = "generated"
 TEST_CASE_TYPE_API = "api"
+CHAINING_METADATA_KEYS = {"extract", "uses", "type", "journey_type"}
+DYNAMIC_RESPONSE_KEYS = {
+    "cartId",
+    "cart_id",
+    "createdAt",
+    "created_at",
+    "id",
+    "orderId",
+    "order_id",
+    "productId",
+    "product_id",
+    "requestId",
+    "request_id",
+    "timestamp",
+    "token",
+    "traceId",
+    "trace_id",
+    "updatedAt",
+    "updated_at",
+    "userId",
+    "user_id",
+}
 
 
 class JourneyNotFoundError(Exception):
@@ -194,7 +216,8 @@ def _fetch_journey(cur: Any, journey_id: str) -> dict[str, Any] | None:
             personas.name AS persona_name,
             journeys.name,
             journeys.description,
-            journeys.example_session_id
+            journeys.example_session_id,
+            journeys.steps
         FROM journeys
         LEFT JOIN personas ON personas.id = journeys.persona_id
         WHERE journeys.id = %s
@@ -233,7 +256,7 @@ def _fetch_test_case_id_by_name(cur: Any, name: str) -> str | None:
 
 
 def _build_test_case_draft(journey: dict[str, Any], logs: list[dict[str, Any]]) -> dict[str, Any]:
-    steps = _build_steps(logs)
+    steps = _build_steps(logs, journey_steps=list(journey.get("steps") or []))
     assertions = _build_assertions(steps)
     name = _build_test_case_name(str(journey["name"]))
     description = f"Generated API test case from journey '{journey['name']}'."
@@ -252,7 +275,7 @@ def _build_test_case_draft(journey: dict[str, Any], logs: list[dict[str, Any]]) 
 
 
 def _normalize_frameworks(frameworks: list[GeneratedTestFramework] | None) -> list[GeneratedTestFramework]:
-    requested = frameworks or [GeneratedTestFramework.PLAYWRIGHT_API]
+    requested = frameworks or [GeneratedTestFramework.JEST_SUPERTEST]
     normalized: list[GeneratedTestFramework] = []
     for framework in requested:
         if framework not in normalized:
@@ -281,9 +304,15 @@ def _build_artifact_drafts(
     return artifacts
 
 
-def _build_steps(logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [
-        {
+def _build_steps(logs: list[dict[str, Any]], journey_steps: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    metadata_by_order = {
+        int(step.get("order")): {key: step[key] for key in CHAINING_METADATA_KEYS if key in step}
+        for step in journey_steps or []
+        if step.get("order") is not None
+    }
+    steps: list[dict[str, Any]] = []
+    for index, row in enumerate(logs):
+        step = {
             "order": index + 1,
             "action_type": row.get("action_type") or "unknown",
             "service_name": row.get("service_name"),
@@ -294,8 +323,9 @@ def _build_steps(logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "golden_response": row.get("response_body") or {},
             "response_time_ms": row.get("response_time_ms"),
         }
-        for index, row in enumerate(logs)
-    ]
+        step.update(metadata_by_order.get(index + 1, {}))
+        steps.append(step)
+    return steps
 
 
 def _build_assertions(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -321,7 +351,39 @@ def _build_assertions(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     },
                 }
             )
+
+            for path, value in _iter_stable_business_fields(golden_response):
+                assertions.append(
+                    {
+                        "order": step["order"],
+                        "type": "business_field",
+                        "expected": {"path": path, "value": value},
+                    }
+                )
+
+        response_time_ms = step.get("response_time_ms")
+        if isinstance(response_time_ms, int) and response_time_ms > 0:
+            assertions.append(
+                {
+                    "order": step["order"],
+                    "type": "response_time_ms",
+                    "expected": {"max_ms": max(1000, response_time_ms * 3)},
+                }
+            )
     return assertions
+
+def _iter_stable_business_fields(value: Any, path: str = "body") -> list[tuple[str, Any]]:
+    fields: list[tuple[str, Any]] = []
+    if isinstance(value, dict):
+        for key, entry_value in value.items():
+            if key in DYNAMIC_RESPONSE_KEYS:
+                continue
+            entry_path = f"{path}.{key}"
+            if isinstance(entry_value, (dict, list)):
+                fields.extend(_iter_stable_business_fields(entry_value, entry_path))
+            elif isinstance(entry_value, (str, int, float, bool)) or entry_value is None:
+                fields.append((entry_path, entry_value))
+    return fields
 
 
 def _build_golden_response(journey: dict[str, Any], logs: list[dict[str, Any]]) -> dict[str, Any]:

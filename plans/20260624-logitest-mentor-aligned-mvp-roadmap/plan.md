@@ -26,10 +26,10 @@ phases:
     status: completed
   - id: phase-05
     title: "Refocus journey analyzer on flows and chaining"
-    status: pending
+    status: completed
   - id: phase-06
     title: "Make Jest/Supertest generation the primary output"
-    status: pending
+    status: completed
   - id: phase-07
     title: "Rework execution and regression reporting against the demo backend"
     status: pending
@@ -123,8 +123,8 @@ Postman / demo script
 | 2 | [Create Express e-commerce demo backend](./phase-02-create-express-ecommerce-demo-backend.md) | Completed |
 | 3 | [Add Elasticsearch logging path and Compose services](./phase-03-add-elasticsearch-logging-path-and-compose-services.md) | Completed |
 | 4 | [Import Elasticsearch logs into FastAPI platform](./phase-04-import-elasticsearch-logs-into-fastapi-platform.md) | Completed |
-| 5 | [Refocus journey analyzer on flows and chaining](./phase-05-refocus-journey-analyzer-on-flows-and-chaining.md) | Pending |
-| 6 | [Make Jest/Supertest generation the primary output](./phase-06-make-jest-supertest-generation-the-primary-output.md) | Pending |
+| 5 | [Refocus journey analyzer on flows and chaining](./phase-05-refocus-journey-analyzer-on-flows-and-chaining.md) | Completed |
+| 6 | [Make Jest/Supertest generation the primary output](./phase-06-make-jest-supertest-generation-the-primary-output.md) | Completed |
 | 7 | [Rework execution and regression reporting against the demo backend](./phase-07-rework-execution-and-regression-reporting-against-demo-backend.md) | Pending |
 | 8 | [Build dashboard and demo script](./phase-08-build-dashboard-and-demo-script.md) | Pending |
 

@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Refocus journey analyzer on flows and chaining"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: ["phase-04"]
@@ -68,13 +68,12 @@ Example step metadata:
 
 ## Success Criteria
 
-- [ ] Login-only sessions produce `LOGIN_FLOW`.
-- [ ] Search sessions produce `SEARCH_FLOW`.
-- [ ] Cart/order sessions produce `ORDER_CREATION_FLOW`.
-- [ ] Order journey includes an extracted `orderId` and a later use.
-- [ ] Behavior mining tests cover prefixed `/api` endpoints.
+- [x] Login-only sessions produce `LOGIN_FLOW`.
+- [x] Search sessions produce `SEARCH_FLOW`.
+- [x] Cart/order sessions produce `ORDER_CREATION_FLOW`.
+- [x] Order journey includes an extracted `orderId` and a later use.
+- [x] Behavior mining tests cover prefixed `/api` endpoints.
 
 ## Risk Assessment
 
 Chaining can become a research project. Limit MVP to deterministic field matching and document more advanced dataflow analysis as future work.
-

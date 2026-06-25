@@ -78,6 +78,19 @@ def test_classify_action_recognizes_ecommerce_action_types() -> None:
         assert classify_action(log).action_type == expected_action_type
 
 
+def test_classify_action_supports_api_prefixed_ecommerce_paths() -> None:
+    examples = [
+        ({"method": "POST", "endpoint": "/api/auth/login", "response_status": 200}, ACTION_LOGIN),
+        ({"method": "GET", "endpoint": "/api/products?query=headphones", "response_status": 200}, ACTION_SEARCH_PRODUCT),
+        ({"method": "GET", "endpoint": "/api/products/prod-headphone-001", "response_status": 200}, ACTION_VIEW_PRODUCT),
+        ({"method": "POST", "endpoint": "/api/cart/items", "response_status": 201}, ACTION_ADD_TO_CART),
+        ({"method": "POST", "endpoint": "/api/orders", "response_status": 201}, ACTION_CHECKOUT),
+        ({"method": "GET", "endpoint": "/api/orders/order-buyer-001", "response_status": 200}, ACTION_VIEW_ORDER),
+    ]
+
+    for log, expected_action_type in examples:
+        assert classify_action(log).action_type == expected_action_type
+
 def test_classify_action_prioritizes_payment_decline_over_2xx_success() -> None:
     classification = classify_action(
         {"method": "POST", "endpoint": "/payments", "response_status": 200, "response_body": {"status": "declined"}}

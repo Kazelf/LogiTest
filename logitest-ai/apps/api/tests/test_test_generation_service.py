@@ -101,7 +101,7 @@ def test_generate_test_case_persists_generated_draft(monkeypatch) -> None:
         "artifacts": [
             {
                 "id": "artifact-id",
-                "framework": "playwright_api",
+                "framework": "jest_supertest",
                 "language": "typescript",
                 "file_path": None,
             }
@@ -116,12 +116,12 @@ def test_generate_test_case_persists_generated_draft(monkeypatch) -> None:
     assert insert_params[2] == "API test - Successful buyer checkout"
     assert insert_params[4] == "api"
     assert insert_params[5] == "generated"
-    assert "@playwright/test" in insert_params[9]
+    assert 'import request from "supertest";' in insert_params[9]
     assert insert_params[10] == "test_generation_service"
     artifact_sql, artifact_params = fake_connection.cursor_instance.executions[-1]
     assert "INSERT INTO test_case_artifacts" in artifact_sql
     assert artifact_params[0] == "test-case-id"
-    assert artifact_params[1] == "playwright_api"
+    assert artifact_params[1] == "jest_supertest"
 
 
 def test_generate_test_case_rejects_duplicate_when_overwrite_false(monkeypatch) -> None:
@@ -149,6 +149,29 @@ def test_normalize_frameworks_removes_duplicates_and_preserves_order() -> None:
 
     assert frameworks == [GeneratedTestFramework.JEST_SUPERTEST, GeneratedTestFramework.PLAYWRIGHT_API]
 
+
+def test_normalize_frameworks_defaults_to_jest_supertest() -> None:
+    assert service._normalize_frameworks(None) == [GeneratedTestFramework.JEST_SUPERTEST]
+
+def test_build_test_case_draft_merges_journey_chaining_metadata() -> None:
+    journey = {
+        **_journey(),
+        "steps": [
+            {"order": 1, "extract": {"orderId": "response.body.data.orderId"}, "type": "ORDER_CREATION_FLOW"},
+            {"order": 2, "uses": {"orderId": "path"}, "type": "ORDER_CREATION_FLOW"},
+        ],
+    }
+    logs = [
+        _log("POST", "/api/orders", 201, {}, {"data": {"orderId": "order-001", "status": "created"}}, "checkout"),
+        _log("GET", "/api/orders/order-001", 200, {}, {"data": {"orderId": "order-001", "status": "created"}}, "view_order"),
+    ]
+
+    draft = service._build_test_case_draft(journey, logs)
+
+    assert draft["steps"][0]["extract"] == {"orderId": "response.body.data.orderId"}
+    assert draft["steps"][1]["uses"] == {"orderId": "path"}
+    assert {"order": 1, "type": "business_field", "expected": {"path": "body.data.status", "value": "created"}} in draft["assertions"]
+    assert {"order": 1, "type": "response_time_ms", "expected": {"max_ms": 1000}} in draft["assertions"]
 
 def _journey() -> dict:
     return {
@@ -218,7 +241,7 @@ class FakeCursor:
         if "INSERT INTO test_case_artifacts" in self.last_sql:
             return {
                 "id": "artifact-id",
-                "framework": "playwright_api",
+                "framework": "jest_supertest",
                 "language": "typescript",
                 "file_path": None,
             }

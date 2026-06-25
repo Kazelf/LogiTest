@@ -58,7 +58,7 @@ def classify_action(log: dict[str, Any]) -> ActionClassification:
     response_body = log.get("response_body") if isinstance(log.get("response_body"), dict) else {}
     response_status = str(response_body.get("status") or "").lower()
     parsed_endpoint = urlsplit(endpoint)
-    path = parsed_endpoint.path.rstrip("/") or "/"
+    path = normalize_endpoint_path(parsed_endpoint.path)
     query = parse_qs(parsed_endpoint.query)
     base_signal = f"{method} {path}"
 
@@ -100,6 +100,14 @@ def classify_action(log: dict[str, Any]) -> ActionClassification:
 def classify_logs(logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{**log, "action_type": classify_action(log).action_type} for log in logs]
 
+
+def normalize_endpoint_path(endpoint: str) -> str:
+    path = urlsplit(str(endpoint or "")).path.rstrip("/") or "/"
+    if path == "/api":
+        return "/"
+    if path.startswith("/api/"):
+        return path[4:] or "/"
+    return path
 
 def _parse_log_timestamp(log: dict[str, Any]) -> datetime | None:
     return _parse_timestamp(log.get("timestamp", log.get("occurred_at")))
