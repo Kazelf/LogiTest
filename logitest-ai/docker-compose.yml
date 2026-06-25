@@ -40,6 +40,7 @@ services:
       DATABASE_URL: postgresql://logitest:logitest@database:5432/logitest_ai
       ELASTICSEARCH_URL: http://elasticsearch:9200
       DEMO_LOG_INDEX: logitest-demo-logs
+      STAGING_API_BASE_URL: http://demo-backend:3001
     ports:
       - "8000:8000"
     volumes:

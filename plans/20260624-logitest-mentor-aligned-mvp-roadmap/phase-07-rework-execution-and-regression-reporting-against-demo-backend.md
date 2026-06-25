@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Rework execution and regression reporting against the demo backend"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: ["phase-06"]
@@ -54,13 +54,20 @@ The preferred route is less flashy but more reliable and already matches existin
 
 ## Success Criteria
 
-- [ ] `POST /api/execution/test-cases/{id}/run` can target the demo backend URL.
-- [ ] Passing demo backend behavior stores `status='passed'`.
-- [ ] Regression mode stores `status='failed'` with useful diff details.
-- [ ] Report APIs return persisted `actual_response` and `diff_result`.
-- [ ] Tests do not require live network or live database.
+- [x] `POST /api/execution/test-cases/{id}/run` can target the demo backend URL.
+- [x] Passing demo backend behavior stores `status='passed'`.
+- [x] Regression mode stores `status='failed'` with useful diff details.
+- [x] Report APIs return persisted `actual_response` and `diff_result`.
+- [x] Tests do not require live network or live database.
+
+## Completion Notes
+
+- Added synchronous JSON-step execution with `httpx`; Jest/Supertest remains the generated visible artifact.
+- Added chaining interpolation for extracted path variables such as `orderId`.
+- Added regression comparison for status code, response schema, stable business fields, and response time.
+- Added report APIs over persisted `test_runs`.
+- Verified with API test suite: `82 passed`.
 
 ## Risk Assessment
 
 Executing generated Jest directly adds process management and Node tooling complexity. Keep JSON-step execution as the MVP truth, and treat generated Jest files as exportable artifacts unless direct Jest execution becomes required.
-
