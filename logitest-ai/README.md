@@ -63,11 +63,35 @@ The intended defense demo flow is:
 10. Enable regression mode in the demo backend.
 11. Run tests again and show the regression report.
 
+### Defense Demo Script
+
+Start the stack, generate behavior on the demo backend, then drive the platform from the dashboard:
+
+```powershell
+cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
+docker compose up --build
+```
+
+In another terminal:
+
+```powershell
+cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
+.\scripts\simulate_demo_flow.ps1
+```
+
+Open `http://localhost:3000`, then use:
+
+```text
+Import ES -> Analyze -> select journey -> Generate Jest -> select test case -> Run Test -> Report
+```
+
+If Elasticsearch is not available, use `Import Mock` in the dashboard as the fallback demo path.
+
 ## Current Repository State
 
 Implemented foundation:
 
-- `apps/web`: Next.js app scaffold.
+- `apps/web`: Next.js operational dashboard for the logs-to-regression-report demo.
 - `apps/api`: FastAPI app scaffold with mock JSON and Elasticsearch log ingestion.
 - `demo-system`: Express e-commerce modular monolith with login, product, cart, order, payment, request context, structured console logging, and optional Elasticsearch indexing.
 - `packages/shared`: shared TypeScript/Zod schema package.
@@ -75,7 +99,7 @@ Implemented foundation:
 - `mock-data/logs.json`: fallback e-commerce-like sample logs.
 - `docker-compose.yml`: current stack with `web`, `api`, `database`, `elasticsearch`, and `demo-backend`.
 
-Planned next components:
+Completed MVP path:
 
 - Journey chaining metadata.
 - Jest + Supertest as default generated artifact.

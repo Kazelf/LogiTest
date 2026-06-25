@@ -35,7 +35,7 @@ phases:
     status: completed
   - id: phase-08
     title: "Build dashboard and demo script"
-    status: pending
+    status: completed
 ---
 
 # Mentor-Aligned MVP Roadmap
@@ -126,7 +126,7 @@ Postman / demo script
 | 5 | [Refocus journey analyzer on flows and chaining](./phase-05-refocus-journey-analyzer-on-flows-and-chaining.md) | Completed |
 | 6 | [Make Jest/Supertest generation the primary output](./phase-06-make-jest-supertest-generation-the-primary-output.md) | Completed |
 | 7 | [Rework execution and regression reporting against the demo backend](./phase-07-rework-execution-and-regression-reporting-against-demo-backend.md) | Completed |
-| 8 | [Build dashboard and demo script](./phase-08-build-dashboard-and-demo-script.md) | Pending |
+| 8 | [Build dashboard and demo script](./phase-08-build-dashboard-and-demo-script.md) | Completed |
 
 ## Acceptance Criteria
 

@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Build dashboard and demo script"
-status: pending
+status: completed
 priority: P2
 effort: "1.5d"
 dependencies: ["phase-07"]
@@ -54,13 +54,12 @@ Use simple API client helpers against `NEXT_PUBLIC_API_BASE_URL`.
 
 ## Success Criteria
 
-- [ ] Dashboard no longer shows the default Next.js starter content.
-- [ ] User can run the demo pipeline from the UI or with documented commands.
-- [ ] Generated Jest/Supertest code is viewable.
-- [ ] Regression report clearly shows expected vs actual differences.
-- [ ] `npm run lint --workspace web` and `npm run build --workspace web` pass or have documented blockers.
+- [x] Dashboard no longer shows the default Next.js starter content.
+- [x] User can run the demo pipeline from the UI or with documented commands.
+- [x] Generated Jest/Supertest code is viewable.
+- [x] Regression report clearly shows expected vs actual differences.
+- [x] `npm run lint --workspace web` and `npm run build --workspace web` pass or have documented blockers.
 
 ## Risk Assessment
 
 Dashboard scope can eat the schedule. Keep it operational and compact: tables, tabs, detail panels, and action buttons are enough for MVP.
-
