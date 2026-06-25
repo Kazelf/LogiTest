@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Import Elasticsearch logs into FastAPI platform"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: ["phase-03"]
@@ -41,8 +41,11 @@ The platform should still use direct `psycopg` like existing modules.
 - Modify: `logitest-ai/apps/api/app/modules/ingestion/schemas.py`
 - Create: `logitest-ai/apps/api/app/modules/ingestion/elasticsearch_client.py`
 - Create: `logitest-ai/database/migrations/002_add_elasticsearch_log_fields.sql`
-- Modify: `logitest-ai/apps/api/requirements.txt`
+- Modify: `logitest-ai/apps/api/app/core/settings.py`
+- Modify: `logitest-ai/docker-compose.yml`
 - Modify: `logitest-ai/apps/api/tests/test_logs_api.py`
+- Create: `logitest-ai/apps/api/tests/test_elasticsearch_client.py`
+- Create: `logitest-ai/apps/api/tests/test_elasticsearch_ingestion_service.py`
 
 ## Implementation Steps
 
@@ -56,13 +59,19 @@ The platform should still use direct `psycopg` like existing modules.
 
 ## Success Criteria
 
-- [ ] `POST /api/logs/import-elasticsearch` returns imported counts.
-- [ ] Imported logs appear in `GET /api/logs`.
-- [ ] Existing mock import tests still pass.
-- [ ] No sensitive value is stored unmasked from ES import.
-- [ ] Import can filter by index and time range.
+- [x] `POST /api/logs/import-elasticsearch` returns imported counts.
+- [x] Imported logs are persisted through the same `logs` table used by `GET /api/logs`.
+- [x] Existing mock import tests still pass.
+- [x] No sensitive value is stored unmasked from ES import.
+- [x] Import can filter by index and time range.
+
+## Validation Notes
+
+- `python -m pytest` from `logitest-ai/apps/api` passed with 65/65 tests.
+- `npm.cmd run test:demo` from `logitest-ai` passed with 6/6 tests.
+- `docker compose config` passed.
+- `docker compose up --build -d database elasticsearch api demo-backend` could not be verified because Docker Desktop daemon was unavailable: `dockerDesktopLinuxEngine` pipe not found.
 
 ## Risk Assessment
 
 Main risk: schema drift between demo logs and mock logs. Mitigate with a single normalization function and tests for both source types.
-

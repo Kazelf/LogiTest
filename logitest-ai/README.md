@@ -68,17 +68,15 @@ The intended defense demo flow is:
 Implemented foundation:
 
 - `apps/web`: Next.js app scaffold.
-- `apps/api`: FastAPI app scaffold and current backend modules.
-- `demo-system`: Express e-commerce modular monolith with login, product, cart, order, payment, request context, and structured console logging.
+- `apps/api`: FastAPI app scaffold with mock JSON and Elasticsearch log ingestion.
+- `demo-system`: Express e-commerce modular monolith with login, product, cart, order, payment, request context, structured console logging, and optional Elasticsearch indexing.
 - `packages/shared`: shared TypeScript/Zod schema package.
 - `database/migrations/001_init_logitest_schema.sql`: PostgreSQL schema for sessions, logs, journeys, test cases, artifacts, and runs.
 - `mock-data/logs.json`: fallback e-commerce-like sample logs.
-- `docker-compose.yml`: current stack with `web`, `api`, and `database`.
+- `docker-compose.yml`: current stack with `web`, `api`, `database`, `elasticsearch`, and `demo-backend`.
 
 Planned next components:
 
-- Elasticsearch service in Docker Compose.
-- Elasticsearch import endpoint.
 - Journey chaining metadata.
 - Jest + Supertest as default generated artifact.
 - Execution/reporting against the demo backend.
@@ -147,9 +145,6 @@ Current Docker stack exposes:
 - Web: `http://localhost:3000`
 - API health: `http://localhost:8000/health`
 - PostgreSQL: `localhost:5432`, database `logitest_ai`, user `logitest`, password `logitest`
-
-Target Docker stack will also expose:
-
 - Demo backend: `http://localhost:3001`
 - Elasticsearch: `http://localhost:9200`
 

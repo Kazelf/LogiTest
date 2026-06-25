@@ -11,6 +11,20 @@ class ImportMockLogsResponse(BaseModel):
     counts: dict[str, int]
 
 
+class ImportElasticsearchLogsRequest(BaseModel):
+    index: str | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    limit: int = Field(default=200, ge=1, le=1000)
+
+class ImportElasticsearchLogsResponse(BaseModel):
+    source: str
+    index: str
+    loaded_records: int
+    imported_logs: int
+    sessions: int
+    counts: dict[str, int]
+
 class LogListItem(BaseModel):
     id: str
     external_log_id: str | None

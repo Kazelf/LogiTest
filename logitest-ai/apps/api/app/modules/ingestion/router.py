@@ -2,7 +2,10 @@
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.modules.ingestion import service
+from app.modules.ingestion.elasticsearch_client import ElasticsearchImportError
 from app.modules.ingestion.schemas import (
+    ImportElasticsearchLogsRequest,
+    ImportElasticsearchLogsResponse,
     ImportMockLogsResponse,
     LogFilters,
     LogListResponse,
@@ -29,6 +32,26 @@ def import_mock_logs() -> dict[str, object]:
             detail="Mock log import failed.",
         ) from exc
 
+
+@router.post("/import-elasticsearch", response_model=ImportElasticsearchLogsResponse)
+def import_elasticsearch_logs(request: ImportElasticsearchLogsRequest) -> dict[str, object]:
+    try:
+        return service.import_elasticsearch_logs(request)
+    except psycopg.OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is unavailable.",
+        ) from exc
+    except ElasticsearchImportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Elasticsearch log import failed.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Elasticsearch log import failed.",
+        ) from exc
 
 @router.get("/sessions", response_model=SessionListResponse)
 def list_sessions(

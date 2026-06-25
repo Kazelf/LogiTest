@@ -3,7 +3,8 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.modules.ingestion import service
-from app.modules.ingestion.schemas import LogFilters, SessionFilters
+from app.modules.ingestion.elasticsearch_client import ElasticsearchImportError
+from app.modules.ingestion.schemas import ImportElasticsearchLogsRequest, LogFilters, SessionFilters
 
 client = TestClient(app)
 
@@ -40,6 +41,57 @@ def test_import_mock_logs_maps_database_errors(monkeypatch) -> None:
     assert response.status_code == 503
     assert response.json() == {"detail": "Database is unavailable."}
 
+
+def test_import_elasticsearch_logs_returns_summary(monkeypatch) -> None:
+    expected = {
+        "source": "elasticsearch",
+        "index": "logitest-demo-logs",
+        "loaded_records": 2,
+        "imported_logs": 2,
+        "sessions": 1,
+        "counts": {"sessions": 1, "logs": 2},
+    }
+
+    def fake_import(request: ImportElasticsearchLogsRequest) -> dict:
+        assert request.index == "logitest-demo-logs"
+        assert request.limit == 25
+        return expected
+
+    monkeypatch.setattr(service, "import_elasticsearch_logs", fake_import)
+
+    response = client.post(
+        "/api/logs/import-elasticsearch",
+        json={"index": "logitest-demo-logs", "limit": 25},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == expected
+
+def test_import_elasticsearch_logs_validates_limit_bounds() -> None:
+    assert client.post("/api/logs/import-elasticsearch", json={"limit": 0}).status_code == 422
+    assert client.post("/api/logs/import-elasticsearch", json={"limit": 1001}).status_code == 422
+
+def test_import_elasticsearch_logs_maps_database_errors(monkeypatch) -> None:
+    def raise_database_error(request: ImportElasticsearchLogsRequest) -> None:
+        raise psycopg.OperationalError("connection failed")
+
+    monkeypatch.setattr(service, "import_elasticsearch_logs", raise_database_error)
+
+    response = client.post("/api/logs/import-elasticsearch", json={})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Database is unavailable."}
+
+def test_import_elasticsearch_logs_maps_elasticsearch_errors(monkeypatch) -> None:
+    def raise_elasticsearch_error(request: ImportElasticsearchLogsRequest) -> None:
+        raise ElasticsearchImportError("search failed")
+
+    monkeypatch.setattr(service, "import_elasticsearch_logs", raise_elasticsearch_error)
+
+    response = client.post("/api/logs/import-elasticsearch", json={})
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Elasticsearch log import failed."}
 
 def test_list_logs_returns_paginated_items(monkeypatch) -> None:
     expected = {

@@ -6,7 +6,13 @@ from typing import Any
 
 from app.modules.test_generation.schemas import GeneratedTestFramework
 
-PROJECT_ROOT = Path(__file__).resolve().parents[5]
+def _find_project_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "package.json").exists() and (parent / "apps" / "api").exists():
+            return parent
+    return Path(__file__).resolve().parents[3]
+
+PROJECT_ROOT = _find_project_root()
 GENERATED_TESTS_ROOT = PROJECT_ROOT / "generated-tests"
 
 FRAMEWORK_DIRECTORIES = {
