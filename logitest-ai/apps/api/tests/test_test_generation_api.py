@@ -43,6 +43,35 @@ def test_generate_test_case_returns_generated_summary(monkeypatch) -> None:
     assert response.json() == expected
 
 
+def test_generate_test_case_defaults_to_jest_supertest(monkeypatch) -> None:
+    expected = {
+        "test_case_id": "test-case-id",
+        "journey_id": "journey-id",
+        "name": "API test - Successful buyer checkout",
+        "status": "generated",
+        "step_count": 1,
+        "artifacts": [
+            {
+                "id": "artifact-id",
+                "framework": "jest_supertest",
+                "language": "typescript",
+                "file_path": None,
+            }
+        ],
+    }
+
+    def fake_generate_test_case(*, journey_id: str, overwrite: bool, frameworks: list[GeneratedTestFramework], write_files: bool) -> dict:
+        assert journey_id == "journey-id"
+        assert frameworks == [GeneratedTestFramework.JEST_SUPERTEST]
+        return expected
+
+    monkeypatch.setattr(service, "generate_test_case", fake_generate_test_case)
+
+    response = client.post("/api/test-generation/generate", json={"journey_id": "journey-id"})
+
+    assert response.status_code == 200
+    assert response.json() == expected
+
 def test_generate_test_case_maps_domain_errors(monkeypatch) -> None:
     def raise_not_found(*, journey_id: str, overwrite: bool, frameworks: list[GeneratedTestFramework], write_files: bool) -> None:
         raise service.JourneyNotFoundError(journey_id)

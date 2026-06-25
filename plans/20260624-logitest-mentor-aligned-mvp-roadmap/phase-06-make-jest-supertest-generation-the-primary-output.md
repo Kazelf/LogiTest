@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Make Jest/Supertest generation the primary output"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: ["phase-05"]
@@ -57,13 +57,12 @@ const orderDetail = await request(baseURL).get(`/api/orders/${orderId}`);
 
 ## Success Criteria
 
-- [ ] API generation without explicit framework returns a Jest + Supertest artifact.
-- [ ] Generated Jest code extracts `orderId` from create-order response.
-- [ ] Generated Jest code uses extracted `orderId` in order-detail request.
-- [ ] Existing Playwright/Mocha tests continue passing where applicable.
-- [ ] Generated tests do not assert full dynamic bodies by default.
+- [x] API generation without explicit framework returns a Jest + Supertest artifact.
+- [x] Generated Jest code extracts `orderId` from create-order response.
+- [x] Generated Jest code uses extracted `orderId` in order-detail request.
+- [x] Existing Playwright/Mocha tests continue passing where applicable.
+- [x] Generated tests do not assert full dynamic bodies by default.
 
 ## Risk Assessment
 
 Renderer logic can become string-template spaghetti. Keep helper functions small and cover generated snippets with focused tests.
-

@@ -23,6 +23,15 @@ def test_render_jest_supertest_generates_api_script() -> None:
     assert 'expect(step1.body).toHaveProperty("token");' in code
 
 
+def test_render_jest_supertest_extracts_and_reuses_chained_order_id() -> None:
+    code = renderers.render_script(framework=GeneratedTestFramework.JEST_SUPERTEST, test_case=_chained_order_test_case())
+
+    assert "const orderId = step1.body.data.orderId;" in code
+    assert ".get(`/api/orders/${orderId}`)" in code
+    assert 'expect(step2.body.data.status).toEqual("created");' in code
+    assert "toBeLessThanOrEqual(1000);" in code
+    assert 'toEqual("order-001")' not in code
+
 def test_render_mocha_supertest_generates_api_script() -> None:
     code = renderers.render_script(framework=GeneratedTestFramework.MOCHA_SUPERTEST, test_case=_test_case())
 
@@ -67,6 +76,33 @@ def _test_case() -> dict:
                 "request_payload": {},
                 "expected_status": 200,
                 "golden_response": {"items": []},
+            },
+        ],
+    }
+
+def _chained_order_test_case() -> dict:
+    return {
+        "name": "API test - ORDER_CREATION_FLOW",
+        "steps": [
+            {
+                "order": 1,
+                "method": "POST",
+                "endpoint": "/api/orders",
+                "request_payload": {},
+                "expected_status": 201,
+                "golden_response": {"data": {"orderId": "order-001", "status": "created"}},
+                "response_time_ms": 80,
+                "extract": {"orderId": "response.body.data.orderId"},
+            },
+            {
+                "order": 2,
+                "method": "GET",
+                "endpoint": "/api/orders/order-001",
+                "request_payload": {},
+                "expected_status": 200,
+                "golden_response": {"data": {"orderId": "order-001", "status": "created"}},
+                "response_time_ms": 75,
+                "uses": {"orderId": "path"},
             },
         ],
     }

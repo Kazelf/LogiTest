@@ -27,7 +27,7 @@ class GeneratedArtifactDetail(GeneratedArtifactSummary):
 class GenerateTestCaseRequest(BaseModel):
     journey_id: str
     overwrite: bool = True
-    frameworks: list[GeneratedTestFramework] = Field(default_factory=lambda: [GeneratedTestFramework.PLAYWRIGHT_API])
+    frameworks: list[GeneratedTestFramework] = Field(default_factory=lambda: [GeneratedTestFramework.JEST_SUPERTEST])
     write_files: bool = False
 
 
