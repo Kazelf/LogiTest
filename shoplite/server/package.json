@@ -1,0 +1,44 @@
+{
+  "name": "shoplite-server",
+  "version": "1.0.0",
+  "description": "ShopLite demo e-commerce API for behavioral testing logs.",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "prisma:generate": "prisma generate --schema src/prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema src/prisma/schema.prisma",
+    "prisma:deploy": "prisma migrate deploy --schema src/prisma/schema.prisma",
+    "seed": "node src/prisma/seed.js",
+    "test": "jest --runInBand",
+    "test:regression": "cross-env ENABLE_PAYMENT_REGRESSION_BUG=true jest --runInBand tests/order-payment.test.js"
+  },
+  "prisma": {
+    "seed": "node src/prisma/seed.js",
+    "schema": "src/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.7",
+    "prisma": "^5.22.0",
+    "supertest": "^7.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFilesAfterEnv": [
+      "<rootDir>/tests/jest.setup.js"
+    ]
+  }
+}

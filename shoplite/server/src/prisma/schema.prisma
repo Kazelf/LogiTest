@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  BUYER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  CANCELLED
+  FAILED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum InventoryTransactionType {
+  INCREASE
+  DECREASE
+  SALE
+  ADJUSTMENT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(BUYER)
+  address      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  carts       Cart[]
+  orders      Order[]
+  requestLogs RequestLog[]
+
+  @@map("users")
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  brand       String
+  description String
+  price       Int
+  stock       Int
+  imageUrl    String?
+  categoryId  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category              Category               @relation(fields: [categoryId], references: [id])
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
+  inventoryTransactions InventoryTransaction[]
+
+  @@index([name])
+  @@index([brand])
+  @@map("products")
+}
+
+model Cart {
+  id        String   @id @default(cuid())
+  userId    String
+  status    String   @default("ACTIVE")
+  voucherId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User       @relation(fields: [userId], references: [id])
+  voucher Voucher?   @relation(fields: [voucherId], references: [id])
+  items   CartItem[]
+
+  @@index([userId])
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  productId String
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([cartId, productId])
+  @@map("cart_items")
+}
+
+model Voucher {
+  id                 String   @id @default(cuid())
+  code               String   @unique
+  discountAmount     Int
+  minimumOrderAmount Int
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  carts  Cart[]
+  orders Order[]
+
+  @@map("vouchers")
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  userId         String
+  voucherId      String?
+  status         OrderStatus @default(PENDING_PAYMENT)
+  subtotalAmount Int
+  discountAmount Int         @default(0)
+  totalAmount    Int
+  shippingAddress String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user    User        @relation(fields: [userId], references: [id])
+  voucher Voucher?    @relation(fields: [voucherId], references: [id])
+  items   OrderItem[]
+  payment Payment?
+
+  @@index([userId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  unitPrice Int
+  lineTotal Int
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  orderId   String        @unique
+  status    PaymentStatus @default(PENDING)
+  provider  String        @default("SHOPLITE_SIMULATOR")
+  amount    Int
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("payments")
+}
+
+model RequestLog {
+  id               String   @id @default(cuid())
+  timestamp        DateTime @default(now())
+  environment      String
+  service          String
+  sessionId        String
+  traceId          String
+  userId           String?
+  method           String
+  endpoint         String
+  requestBody      Json?
+  responseStatus   Int
+  responseBody     Json?
+  responseTimeMs   Int
+  errorCode        String?
+  actionName       String?
+  businessEntity   String?
+  businessEntityId String?
+  journeyHint      String?
+  previousStep     String?
+  nextExpectedStep String?
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([sessionId])
+  @@index([traceId])
+  @@map("request_logs")
+}
+
+model InventoryTransaction {
+  id        String                   @id @default(cuid())
+  productId String
+  type      InventoryTransactionType
+  quantity  Int
+  reason    String?
+  createdAt DateTime                 @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+  @@map("inventory_transactions")
+}
