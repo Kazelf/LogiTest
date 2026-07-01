@@ -1,8 +1,7 @@
 # Render Services Setup
 
-This project deploys two Render Free Web Services:
+This project deploys one Render Free Web Service for the LogiTest API:
 
-- `logitest-demo`: Express e-commerce demo backend.
 - `logitest-api`: FastAPI LogiTest AI backend.
 
 The repository includes a root `render.yaml` Blueprint. Secrets are intentionally not stored in the file.
@@ -19,34 +18,8 @@ The repository includes a root `render.yaml` Blueprint. Secrets are intentionall
 1. Open Render.
 2. Create a new Blueprint from the GitHub repository.
 3. Select the root `render.yaml`.
-4. Confirm the two services:
-   - `logitest-demo`
-   - `logitest-api`
+4. Confirm the `logitest-api` service.
 5. When Render asks for unsynced environment variables, enter the values below.
-
-## logitest-demo
-
-Render Blueprint config:
-
-```text
-Root Directory: logitest-ai/demo-system
-Build Command: npm install
-Start Command: npm start
-Plan: Free
-```
-
-Environment variables:
-
-```text
-REGRESSION_MODE=false
-```
-
-Smoke check after deploy:
-
-```powershell
-Invoke-RestMethod https://<demo-service>.onrender.com/health
-Invoke-RestMethod https://<demo-service>.onrender.com/api/products
-```
 
 ## logitest-api
 
@@ -63,8 +36,7 @@ Environment variables:
 
 ```text
 DATABASE_URL=<rotated Neon connection string with sslmode=require>
-DEMO_BACKEND_URL=https://<demo-service>.onrender.com
-STAGING_API_BASE_URL=https://<demo-service>.onrender.com
+STAGING_API_BASE_URL=https://<shoplite-service>.onrender.com
 ELASTICSEARCH_URL=
 DEMO_LOG_INDEX=logitest-demo-logs
 ```
@@ -83,7 +55,7 @@ Expected response:
 
 ## Notes
 
-- Render Free services can sleep, so open both service URLs before a demo.
+- Render Free services can sleep, so open service URLs before a demo.
 - `DATABASE_URL` must never be committed to git.
 - Hosted Render deployment does not include Elasticsearch. Use local Docker Compose for the full Elasticsearch demo path.
 - The hosted free path should use the fallback/mock import flow until cloud Elasticsearch is intentionally added.

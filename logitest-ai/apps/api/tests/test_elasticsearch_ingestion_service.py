@@ -1,4 +1,5 @@
 from app.modules.ingestion import service
+from pathlib import Path
 
 
 def test_normalize_elasticsearch_hit_masks_sensitive_fields_and_maps_core_fields() -> None:
@@ -57,3 +58,30 @@ def test_build_external_log_id_uses_deterministic_hash_without_es_id() -> None:
 
     assert first == second
     assert first.startswith("es:logitest-demo-logs:")
+
+def test_normalize_shoplite_log_maps_jsonl_fields() -> None:
+    record = {
+        "timestamp": "2026-07-01T15:00:00.000Z",
+        "environment": "production-demo",
+        "service": "shoplite-api",
+        "session_id": "sess-shoplite-001",
+        "trace_id": "trace-shoplite-001",
+        "user_id": "user-001",
+        "method": "POST",
+        "endpoint": "/api/auth/login",
+        "request_body": {"email": "normal_buyer@example.com", "password": "Password123"},
+        "response_status": 200,
+        "response_body": {"accessToken": "secret-token", "user": {"id": "user-001"}},
+        "response_time_ms": 25,
+    }
+
+    normalized = service._normalize_shoplite_log(record, source_path=Path("request-logs.jsonl"))
+
+    assert normalized["service_name"] == "shoplite-api"
+    assert normalized["session_id"] == "sess-shoplite-001"
+    assert normalized["normalized_endpoint"] == "/api/auth/login"
+    assert normalized["request_payload"]["email"] == "***MASKED***"
+    assert normalized["request_payload"]["password"] == "***MASKED***"
+    assert normalized["response_body"]["accessToken"] == "***MASKED***"
+    assert normalized["response_status"] == 200
+    assert normalized["external_log_id"].startswith("es:shoplite_jsonl:")

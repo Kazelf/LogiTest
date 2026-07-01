@@ -1,16 +1,5 @@
 services:
   - type: web
-    name: logitest-demo
-    runtime: node
-    plan: free
-    rootDir: logitest-ai/demo-system
-    buildCommand: npm install
-    startCommand: npm start
-    envVars:
-      - key: REGRESSION_MODE
-        value: "false"
-
-  - type: web
     name: logitest-api
     runtime: python
     plan: free
@@ -19,8 +8,6 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: DATABASE_URL
-        sync: false
-      - key: DEMO_BACKEND_URL
         sync: false
       - key: STAGING_API_BASE_URL
         sync: false

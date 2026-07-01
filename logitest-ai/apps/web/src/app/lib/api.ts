@@ -50,6 +50,7 @@ export type ListResponse<T> = {
 export type ImportResponse = {
   source: string;
   index?: string;
+  path?: string;
   loaded_records: number;
   imported_logs?: number;
   sessions: number;
@@ -186,6 +187,7 @@ export type TestRun = {
 
 export const api = {
   importMockLogs: () => request<ImportResponse>("/api/logs/import-mock", { method: "POST" }),
+  importShopLiteLogs: () => request<ImportResponse>("/api/logs/import-shoplite", { method: "POST" }),
   importElasticsearchLogs: () =>
     request<ImportResponse>("/api/logs/import-elasticsearch", {
       method: "POST",
@@ -214,11 +216,11 @@ export const api = {
     }),
   getTestCase: (testCaseId: string) =>
     request<TestCaseDetail>(`/api/test-generation/test-cases/${testCaseId}`),
-  runTestCase: (testCaseId: string, targetBaseUrl: string) =>
+  runTestCase: (testCaseId: string, targetBaseUrl?: string) =>
     request<TestRun>(`/api/execution/test-cases/${testCaseId}/run`, {
       method: "POST",
       body: JSON.stringify({
-        target_base_url: targetBaseUrl,
+        ...(targetBaseUrl ? { target_base_url: targetBaseUrl } : {}),
         target_environment: "demo",
         timeout_seconds: 10,
       }),

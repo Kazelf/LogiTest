@@ -93,6 +93,44 @@ def test_import_elasticsearch_logs_maps_elasticsearch_errors(monkeypatch) -> Non
     assert response.status_code == 502
     assert response.json() == {"detail": "Elasticsearch log import failed."}
 
+def test_import_shoplite_logs_returns_summary(monkeypatch) -> None:
+    expected = {
+        "source": "shoplite_jsonl",
+        "path": "D:/ViettelDigitalTalent/LogiTest/shoplite/server/logs/request-logs.jsonl",
+        "loaded_records": 3,
+        "imported_logs": 3,
+        "sessions": 1,
+        "counts": {"sessions": 1, "logs": 3},
+    }
+    monkeypatch.setattr(service, "import_shoplite_logs_from_jsonl", lambda: expected)
+
+    response = client.post("/api/logs/import-shoplite")
+
+    assert response.status_code == 200
+    assert response.json() == expected
+
+def test_import_shoplite_logs_maps_missing_file(monkeypatch) -> None:
+    def raise_missing_file() -> None:
+        raise service.ShopLiteLogFileNotFoundError("missing.jsonl")
+
+    monkeypatch.setattr(service, "import_shoplite_logs_from_jsonl", raise_missing_file)
+
+    response = client.post("/api/logs/import-shoplite")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "ShopLite log file not found: missing.jsonl"}
+
+def test_import_shoplite_logs_maps_database_errors(monkeypatch) -> None:
+    def raise_database_error() -> None:
+        raise psycopg.OperationalError("connection failed")
+
+    monkeypatch.setattr(service, "import_shoplite_logs_from_jsonl", raise_database_error)
+
+    response = client.post("/api/logs/import-shoplite")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Database is unavailable."}
+
 def test_list_logs_returns_paginated_items(monkeypatch) -> None:
     expected = {
         "items": [

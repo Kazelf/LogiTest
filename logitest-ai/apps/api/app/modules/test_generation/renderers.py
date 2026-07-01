@@ -86,7 +86,7 @@ def render_jest_supertest(test_case: dict[str, Any]) -> str:
     lines = [
         'import request from "supertest";',
         "",
-        'const baseURL = process.env.TARGET_BASE_URL || "http://localhost:3001";',
+        'const baseURL = process.env.TARGET_BASE_URL || "http://localhost:4000";',
         "",
         f'describe("{_escape_string(test_case["name"])}", () => {{',
         '  it("replays learned behavior journey", async () => {',
@@ -105,7 +105,7 @@ def render_mocha_supertest(test_case: dict[str, Any]) -> str:
         'import request from "supertest";',
         'import { expect } from "chai";',
         "",
-        'const baseURL = process.env.TARGET_BASE_URL || "http://localhost:3001";',
+        'const baseURL = process.env.TARGET_BASE_URL || "http://localhost:4000";',
         "",
         f'describe("{_escape_string(test_case["name"])}", () => {{',
         '  it("replays learned behavior journey", async () => {',

@@ -18,7 +18,7 @@ def test_run_test_case_api_returns_persisted_run(monkeypatch) -> None:
         timeout_seconds: float,
     ) -> dict:
         assert test_case_id == "test-case-id"
-        assert target_base_url == "http://localhost:3001"
+        assert target_base_url == "http://localhost:4000"
         assert target_environment == "staging"
         assert timeout_seconds == 5
         return expected
@@ -27,7 +27,7 @@ def test_run_test_case_api_returns_persisted_run(monkeypatch) -> None:
 
     response = client.post(
         "/api/execution/test-cases/test-case-id/run",
-        json={"target_base_url": "http://localhost:3001", "timeout_seconds": 5},
+        json={"target_base_url": "http://localhost:4000", "timeout_seconds": 5},
     )
 
     assert response.status_code == 200

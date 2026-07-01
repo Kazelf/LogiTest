@@ -25,6 +25,14 @@ class ImportElasticsearchLogsResponse(BaseModel):
     sessions: int
     counts: dict[str, int]
 
+class ImportShopLiteLogsResponse(BaseModel):
+    source: str
+    path: str
+    loaded_records: int
+    imported_logs: int
+    sessions: int
+    counts: dict[str, int]
+
 class LogListItem(BaseModel):
     id: str
     external_log_id: str | None

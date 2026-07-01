@@ -1,5 +1,4 @@
 "use client";
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -17,7 +16,6 @@ import {
   type TestRun,
 } from "./lib/api";
 
-const DEMO_TARGET_URL = "http://localhost:3001";
 const TABS = ["Logs", "Sessions", "Journeys", "Test Cases", "Runs", "Report"] as const;
 
 type Tab = (typeof TABS)[number];
@@ -213,6 +211,11 @@ export default function Home() {
               />
               <ActionButton
                 disabled={Boolean(busy)}
+                label="Import ShopLite"
+                onClick={() => runAction("Import ShopLite logs", api.importShopLiteLogs)}
+              />
+              <ActionButton
+                disabled={Boolean(busy)}
                 label="Import ES"
                 onClick={() => runAction("Import Elasticsearch logs", api.importElasticsearchLogs)}
               />
@@ -232,16 +235,14 @@ export default function Home() {
                 disabled={Boolean(busy) || !selectedTestCaseId}
                 label="Run Test"
                 onClick={() =>
-                  runAction("Run selected test", () =>
-                    api.runTestCase(selectedTestCaseId, DEMO_TARGET_URL),
-                  )
+                  runAction("Run selected test", () => api.runTestCase(selectedTestCaseId))
                 }
               />
               <ActionButton disabled={Boolean(busy)} label="Refresh" onClick={() => runAction("Refresh", loadLists)} />
             </div>
             <p className="mt-3 text-sm text-slate-600">
               API: <span className="font-mono text-slate-900">{API_BASE_URL}</span> · Target:{" "}
-              <span className="font-mono text-slate-900">{DEMO_TARGET_URL}</span>
+              <span className="font-mono text-slate-900">configured by API</span>
             </p>
           </div>
           <div className="min-h-20 border border-slate-200 bg-slate-50 p-3 text-sm">
@@ -321,7 +322,7 @@ function Header({
         <p className="text-sm font-semibold uppercase text-slate-500">LogiTest AI MVP</p>
         <h1 className="text-3xl font-semibold text-slate-950">Behavior regression dashboard</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          Import API logs, mine journeys, generate Jest/Supertest tests, execute against the demo backend, and inspect
+          Import API logs, mine journeys, generate Jest/Supertest tests, execute against ShopLite, and inspect
           regression diffs from one operational screen.
         </p>
       </div>
@@ -371,7 +372,7 @@ function EmptyState({ label }: { label: string }) {
 
 function LogsPanel({ logs }: { logs: LogItem[] }) {
   if (logs.length === 0) {
-    return <EmptyState label="No logs yet. Run the demo flow and import Elasticsearch, or import mock logs." />;
+    return <EmptyState label="No logs yet. Run ShopLite journeys and import logs, or import mock logs." />;
   }
   return (
     <Panel title="Raw API Logs" subtitle="Latest normalized requests stored by the platform.">
@@ -591,7 +592,7 @@ function RunsPanel({
   selectedRun: TestRun | null;
 }) {
   if (runs.length === 0) {
-    return <EmptyState label="No runs yet. Generate a test case, then run it against the demo backend." />;
+    return <EmptyState label="No runs yet. Generate a test case, then run it against ShopLite." />;
   }
   return (
     <SplitPanel

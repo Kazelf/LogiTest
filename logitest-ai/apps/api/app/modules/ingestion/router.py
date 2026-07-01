@@ -7,6 +7,7 @@ from app.modules.ingestion.schemas import (
     ImportElasticsearchLogsRequest,
     ImportElasticsearchLogsResponse,
     ImportMockLogsResponse,
+    ImportShopLiteLogsResponse,
     LogFilters,
     LogListResponse,
     SessionDetailResponse,
@@ -51,6 +52,26 @@ def import_elasticsearch_logs(request: ImportElasticsearchLogsRequest) -> dict[s
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Elasticsearch log import failed.",
+        ) from exc
+
+@router.post("/import-shoplite", response_model=ImportShopLiteLogsResponse)
+def import_shoplite_logs() -> dict[str, object]:
+    try:
+        return service.import_shoplite_logs_from_jsonl()
+    except service.ShopLiteLogFileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"ShopLite log file not found: {exc}",
+        ) from exc
+    except psycopg.OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is unavailable.",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="ShopLite log import failed.",
         ) from exc
 
 @router.get("/sessions", response_model=SessionListResponse)

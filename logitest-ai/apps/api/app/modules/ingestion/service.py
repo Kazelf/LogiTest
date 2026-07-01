@@ -2,6 +2,7 @@
 
 import importlib.util
 import hashlib
+import json
 import re
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -28,9 +29,14 @@ def _find_project_root() -> Path:
 PROJECT_ROOT = _find_project_root()
 IMPORT_SCRIPT_PATH = PROJECT_ROOT / "scripts" / "import_mock_logs.py"
 MOCK_LOGS_SOURCE = "mock-data/logs.json"
+SHOPLITE_LOG_SOURCE = "shoplite_jsonl"
+DEFAULT_SHOPLITE_LOG_PATH = PROJECT_ROOT.parent / "shoplite" / "server" / "logs" / "request-logs.jsonl"
 
 
 class SessionNotFoundError(Exception):
+    pass
+
+class ShopLiteLogFileNotFoundError(Exception):
     pass
 
 SENSITIVE_KEYS = {
@@ -104,6 +110,32 @@ def import_elasticsearch_logs(request: ImportElasticsearchLogsRequest) -> dict[s
         "counts": counts,
     }
 
+
+def import_shoplite_logs_from_jsonl() -> dict[str, Any]:
+    source_path = _resolve_shoplite_log_path()
+    raw_records = _load_jsonl_records(source_path)
+    records = [_normalize_shoplite_log(record, source_path=source_path) for record in raw_records]
+    grouped_records = _group_normalized_records(records)
+
+    with connection.connect() as conn:
+        session_ids = _upsert_elasticsearch_sessions(
+            conn,
+            grouped_records,
+            index=source_path.name,
+            source=SHOPLITE_LOG_SOURCE,
+        )
+        _upsert_elasticsearch_logs(conn, records, session_ids, index=source_path.name)
+        counts = _fetch_ingestion_counts(conn)
+        conn.commit()
+
+    return {
+        "source": SHOPLITE_LOG_SOURCE,
+        "path": str(source_path),
+        "loaded_records": len(raw_records),
+        "imported_logs": len(records),
+        "sessions": len(grouped_records),
+        "counts": counts,
+    }
 
 def list_logs(*, limit: int, offset: int, filters: LogFilters) -> dict[str, Any]:
     where_sql, where_params = _build_log_filters(filters)
@@ -306,6 +338,80 @@ def _normalize_elasticsearch_hit(hit: dict[str, Any], *, index: str) -> dict[str
         },
     }
 
+def _resolve_shoplite_log_path() -> Path:
+    configured = settings.shoplite_log_path
+    path = Path(configured).expanduser() if configured else DEFAULT_SHOPLITE_LOG_PATH
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    path = path.resolve()
+    if not path.exists():
+        raise ShopLiteLogFileNotFoundError(str(path))
+    return path
+
+def _load_jsonl_records(path: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                record = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSONL at {path}:{line_number}") from exc
+            if not isinstance(record, dict):
+                raise ValueError(f"Invalid JSONL object at {path}:{line_number}")
+            records.append(record)
+    return records
+
+def _normalize_shoplite_log(record: dict[str, Any], *, source_path: Path) -> dict[str, Any]:
+    masked_record = mask_sensitive(record)
+    timestamp = str(masked_record.get("timestamp") or datetime.now(timezone.utc).isoformat())
+    response_status = masked_record.get("response_status", masked_record.get("status_code"))
+    endpoint = masked_record.get("endpoint")
+    request_body = masked_record.get("request_body", masked_record.get("request_payload"))
+    service_name = masked_record.get("service_name") or masked_record.get("service") or "shoplite-api"
+    external_log_id = _build_external_log_id(
+        hit={},
+        source={
+            "external_log_id": masked_record.get("external_log_id"),
+            "timestamp": timestamp,
+            "session_id": masked_record.get("session_id"),
+            "request_id": masked_record.get("request_id"),
+            "method": masked_record.get("method"),
+            "endpoint": endpoint,
+            "response_status": response_status,
+        },
+        index=SHOPLITE_LOG_SOURCE,
+    )
+
+    return {
+        "external_log_id": external_log_id,
+        "timestamp": timestamp,
+        "level": masked_record.get("level") or ("error" if _as_int(response_status, 0) >= 500 else "info"),
+        "service_name": service_name,
+        "trace_id": masked_record.get("trace_id"),
+        "session_id": masked_record.get("session_id") or "unknown-session",
+        "request_id": masked_record.get("request_id"),
+        "user_id": masked_record.get("user_id"),
+        "method": masked_record.get("method"),
+        "endpoint": endpoint,
+        "normalized_endpoint": normalize_endpoint(endpoint),
+        "request_headers": masked_record.get("request_headers") or {},
+        "request_payload": request_body or {},
+        "response_status": _as_int(response_status, None),
+        "response_body": masked_record.get("response_body") or {},
+        "response_time_ms": _as_int(masked_record.get("response_time_ms"), None),
+        "environment": masked_record.get("environment"),
+        "source_index": source_path.name,
+        "raw_log": {
+            **masked_record,
+            "_shoplite": {
+                "path": str(source_path),
+            },
+        },
+    }
+
 def _build_external_log_id(*, hit: dict[str, Any], source: dict[str, Any], index: str) -> str:
     external_log_id = source.get("external_log_id")
     if external_log_id:
@@ -334,6 +440,7 @@ def _upsert_elasticsearch_sessions(
     grouped_records: dict[str, list[dict[str, Any]]],
     *,
     index: str,
+    source: str = "elasticsearch",
 ) -> dict[str, str]:
     session_ids: dict[str, str] = {}
 
@@ -374,7 +481,7 @@ def _upsert_elasticsearch_sessions(
                     min(timestamps),
                     max(timestamps),
                     len(records),
-                    "elasticsearch",
+                    source,
                     Jsonb(metadata),
                 ),
             )

@@ -40,7 +40,8 @@ services:
       DATABASE_URL: postgresql://logitest:logitest@database:5432/logitest_ai
       ELASTICSEARCH_URL: http://elasticsearch:9200
       DEMO_LOG_INDEX: logitest-demo-logs
-      STAGING_API_BASE_URL: http://demo-backend:3001
+      SHOPLITE_LOG_PATH: /shoplite-logs/request-logs.jsonl
+      STAGING_API_BASE_URL: http://host.docker.internal:4000
     ports:
       - "8000:8000"
     volumes:
@@ -48,29 +49,10 @@ services:
       - ./scripts:/app/scripts
       - ./mock-data:/app/mock-data
       - ./generated-tests:/app/generated-tests
+      - ../shoplite/server/logs:/shoplite-logs
     depends_on:
       database:
         condition: service_healthy
-      elasticsearch:
-        condition: service_started
-
-  demo-backend:
-    build:
-      context: .
-      dockerfile: demo-system/Dockerfile
-    environment:
-      NODE_ENV: demo
-      DEMO_BACKEND_PORT: 3001
-      ELASTICSEARCH_URL: http://elasticsearch:9200
-      DEMO_LOG_INDEX: logitest-demo-logs
-      REGRESSION_MODE: "false"
-    ports:
-      - "3001:3001"
-    volumes:
-      - ./demo-system:/app/demo-system
-      - /app/node_modules
-      - /app/demo-system/node_modules
-    depends_on:
       elasticsearch:
         condition: service_started
 
@@ -87,6 +69,8 @@ services:
       - ./apps/web:/app/apps/web
       - ./packages/shared:/app/packages/shared
       - /app/node_modules
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
     depends_on:
       - api
 
