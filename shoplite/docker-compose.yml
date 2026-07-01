@@ -17,5 +17,42 @@ services:
       timeout: 5s
       retries: 12
 
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: shoplite-server
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://shoplite:shoplite@postgres:5432/shoplite?schema=public
+      PORT: 4000
+      JWT_SECRET: shoplite-dev-secret
+      CLIENT_ORIGIN: http://localhost:5173
+      ENVIRONMENT: production-demo
+      ENABLE_PAYMENT_REGRESSION_BUG: "false"
+      ENABLE_ELASTICSEARCH_LOGGING: ${ENABLE_ELASTICSEARCH_LOGGING:-false}
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL:-http://host.docker.internal:9200}
+      SHOPLITE_LOG_INDEX: ${SHOPLITE_LOG_INDEX:-logitest-demo-logs}
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./server/logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: shoplite-client
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: http://localhost:4000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - server
+
 volumes:
   shoplite_postgres_data:

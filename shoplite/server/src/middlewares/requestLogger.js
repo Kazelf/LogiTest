@@ -3,6 +3,7 @@ const path = require("path");
 const { randomUUID } = require("crypto");
 const { env } = require("../config/env");
 const { prisma } = require("../config/prisma");
+const { indexRequestLog } = require("../config/elasticsearchLogger");
 const { getLogMetadata } = require("../modules/logs/logMetadata");
 
 const logPath = path.join(__dirname, "..", "..", "logs", "request-logs.jsonl");
@@ -65,6 +66,10 @@ function requestLogger(req, res, next) {
 
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
     fs.appendFile(logPath, `${JSON.stringify(logRecord)}\n`, () => {});
+
+    indexRequestLog(logRecord).catch((error) => {
+      console.error("Failed to index ShopLite request log in Elasticsearch:", error.message);
+    });
 
     prisma.requestLog
       .create({

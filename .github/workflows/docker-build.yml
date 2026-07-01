@@ -11,27 +11,39 @@ on:
       - develop
   workflow_dispatch:
 
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   docker-build:
-    name: Docker compose and image builds
+    name: Compose and image builds
     runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: logitest-ai
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate Docker Compose config
+      - name: Validate LogiTest compose config
+        working-directory: logitest-ai
         run: docker compose config
 
-      - name: Build FastAPI image
+      - name: Validate ShopLite compose config
+        working-directory: shoplite
+        run: docker compose config
+
+      - name: Build LogiTest FastAPI image
+        working-directory: logitest-ai
         run: docker build -f apps/api/Dockerfile apps/api
 
-      - name: Build Next.js image
+      - name: Build LogiTest dashboard image
+        working-directory: logitest-ai
         run: docker build -f apps/web/Dockerfile .
 
-      - name: Build demo backend image
-        run: docker build -f demo-system/Dockerfile .
+      - name: Build ShopLite API image
+        working-directory: shoplite
+        run: docker build -f server/Dockerfile server
+
+      - name: Build ShopLite frontend image
+        working-directory: shoplite
+        run: docker build -f client/Dockerfile client

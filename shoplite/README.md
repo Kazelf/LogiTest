@@ -10,7 +10,40 @@ ShopLite is a mini e-commerce System Under Test for the LogiTest AI-Driven Behav
 - Logs: `server/logs/request-logs.jsonl`
 - Tests: Jest + Supertest
 
-## 1. Install Dependencies
+## 1. Run With Docker
+
+```bash
+cd shoplite
+docker compose up --build
+```
+
+URLs:
+
+- Frontend: `http://localhost:5173`
+- API: `http://localhost:4000`
+- PostgreSQL: `localhost:5433`
+
+The server container runs Prisma migrations and seeds demo data before starting.
+
+### Enable Elasticsearch Logging With Docker
+
+If LogiTest AI's Elasticsearch is running at `http://localhost:9200`, create or edit `shoplite/.env`:
+
+```env
+ENABLE_ELASTICSEARCH_LOGGING=true
+ELASTICSEARCH_URL=http://host.docker.internal:9200
+SHOPLITE_LOG_INDEX=logitest-demo-logs
+```
+
+Then restart ShopLite:
+
+```bash
+docker compose up --build
+```
+
+Use `http://host.docker.internal:9200` inside Docker because the ShopLite server container reaches Elasticsearch through the host-published port.
+
+## 2. Install Dependencies Manually
 
 ```bash
 cd shoplite/server
@@ -20,7 +53,7 @@ cd ../client
 npm install
 ```
 
-## 2. Run Database
+## 3. Run Database Only
 
 ```bash
 cd shoplite
@@ -29,7 +62,7 @@ docker compose up -d
 
 PostgreSQL runs on `localhost:5433`.
 
-## 3. Configure Environment
+## 4. Configure Environment
 
 ```bash
 cd shoplite/server
@@ -39,7 +72,15 @@ cd ../client
 cp .env.example .env
 ```
 
-## 4. Run Migration
+For manual non-Docker backend runs, enable Elasticsearch in `shoplite/server/.env`:
+
+```env
+ENABLE_ELASTICSEARCH_LOGGING=true
+ELASTICSEARCH_URL=http://localhost:9200
+SHOPLITE_LOG_INDEX=logitest-demo-logs
+```
+
+## 5. Run Migration
 
 ```bash
 cd shoplite/server
@@ -47,7 +88,7 @@ npm run prisma:generate
 npm run prisma:migrate
 ```
 
-## 5. Seed Demo Data
+## 6. Seed Demo Data
 
 ```bash
 cd shoplite/server
@@ -63,7 +104,7 @@ Demo users all use password `Password123`:
 - `error_case_user@example.com`
 - `admin@example.com`
 
-## 6. Run Backend
+## 7. Run Backend
 
 ```bash
 cd shoplite/server
@@ -72,7 +113,7 @@ npm run dev
 
 API base URL: `http://localhost:4000`
 
-## 7. Run Frontend
+## 8. Run Frontend
 
 ```bash
 cd shoplite/client
@@ -81,7 +122,7 @@ npm run dev
 
 Frontend URL: `http://localhost:5173`
 
-## 8. Run Tests
+## 9. Run Tests
 
 Make sure the database is running and migrated first.
 
@@ -99,7 +140,7 @@ npm run test:regression
 
 With `ENABLE_PAYMENT_REGRESSION_BUG=true`, payment simulation returns `payment_status = SUCCESS`, but the order remains `PENDING_PAYMENT`. The regression test expects the correct behavior (`PAID`), so it fails by design and demonstrates the high-severity paid-but-not-confirmed bug.
 
-## 9. Enable Regression Bug Manually
+## 10. Enable Regression Bug Manually
 
 Set this in `shoplite/server/.env`:
 
@@ -109,13 +150,15 @@ ENABLE_PAYMENT_REGRESSION_BUG=true
 
 Then restart the backend.
 
-## 10. View Logs
+## 11. View Logs
 
 Every API request is appended as one JSON object per line:
 
 ```text
 shoplite/server/logs/request-logs.jsonl
 ```
+
+If `ENABLE_ELASTICSEARCH_LOGGING=true`, the same request log is also indexed into Elasticsearch.
 
 Each log includes:
 
