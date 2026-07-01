@@ -110,12 +110,12 @@ Invoke-RestMethod "http://localhost:8000/api/test-generation/test-cases/<test-ca
 
 ## Execution And Reports API
 
-Run a generated JSON-step test case against the demo backend. If `target_base_url` is omitted, the API uses `STAGING_API_BASE_URL`, defaulting to `http://localhost:3001`:
+Run a generated JSON-step test case against ShopLite. If `target_base_url` is omitted, the API uses `STAGING_API_BASE_URL`, defaulting to `http://localhost:4000`:
 
 ```powershell
 Invoke-RestMethod -Method Post http://localhost:8000/api/execution/test-cases/<test-case-id>/run `
   -ContentType "application/json" `
-  -Body '{"target_base_url":"http://localhost:3001","target_environment":"staging"}'
+  -Body '{"target_base_url":"http://localhost:4000","target_environment":"staging"}'
 ```
 
 List run history for one generated test case:
@@ -144,7 +144,7 @@ Invoke-RestMethod -Method Post http://localhost:8000/api/test-generation/generat
 Invoke-RestMethod "http://localhost:8000/api/test-generation/test-cases?limit=5"
 Invoke-RestMethod -Method Post http://localhost:8000/api/execution/test-cases/<test-case-id>/run `
   -ContentType "application/json" `
-  -Body '{"target_base_url":"http://localhost:3001"}'
+  -Body '{"target_base_url":"http://localhost:4000"}'
 Invoke-RestMethod "http://localhost:8000/api/reports/test-runs?limit=5"
 ```
 

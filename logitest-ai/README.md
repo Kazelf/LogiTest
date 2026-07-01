@@ -17,10 +17,10 @@ This MVP follows the mentor-aligned scope:
 ## Architecture
 
 ```text
-Postman / demo script
+ShopLite user journey
         |
         v
-demo-system/ Express e-commerce backend
+shoplite/ Express e-commerce system
         |
         | structured API logs
         v
@@ -38,13 +38,13 @@ apps/web Next.js dashboard
 
 ## Main Components
 
-- `demo-system`: planned Express.js e-commerce backend used as the system under test.
+- `../shoplite`: Express + React e-commerce system used as the system under test.
 - `apps/web`: Next.js frontend dashboard.
 - `apps/api`: Python FastAPI backend API organized as a modular monolith.
 - `packages/shared`: shared TypeScript schemas and utilities.
 - `mock-data`: fallback JSON logs for demo safety.
 - `database`: PostgreSQL schema and migrations.
-- `scripts`: local automation scripts for import/demo tasks.
+- `scripts`: local automation scripts for import tasks.
 - `generated-tests`: generated API test artifacts.
 
 ## Demo Flow
@@ -52,20 +52,20 @@ apps/web Next.js dashboard
 The intended defense demo flow is:
 
 1. Start the local stack with Docker Compose.
-2. Run a Postman collection or demo script against `demo-system`.
-3. Demo backend writes structured logs to Elasticsearch.
+2. Run user journeys against ShopLite.
+3. ShopLite writes structured API logs.
 4. Import Elasticsearch logs into LogiTest AI.
 5. Analyze journeys and show login/search/order flows.
 6. Show API chaining, especially `POST /api/orders` -> `GET /api/orders/:id`.
 7. Generate Jest + Supertest API tests.
-8. Run generated tests against the demo backend.
+8. Run generated tests against ShopLite.
 9. Show pass/fail execution result.
-10. Enable regression mode in the demo backend.
+10. Enable ShopLite's regression bug toggle.
 11. Run tests again and show the regression report.
 
 ### Defense Demo Script
 
-Start the stack, generate behavior on the demo backend, then drive the platform from the dashboard:
+Start the LogiTest stack, generate behavior in ShopLite, then drive the platform from the dashboard:
 
 ```powershell
 cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
@@ -75,8 +75,14 @@ docker compose up --build
 In another terminal:
 
 ```powershell
-cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
-.\scripts\simulate_demo_flow.ps1
+cd D:\ViettelDigitalTalent\LogiTest\shoplite
+docker compose up -d
+
+cd D:\ViettelDigitalTalent\LogiTest\shoplite\server
+npm run dev
+
+cd D:\ViettelDigitalTalent\LogiTest\shoplite\client
+npm run dev
 ```
 
 Open `http://localhost:3000`, then use:
@@ -85,7 +91,7 @@ Open `http://localhost:3000`, then use:
 Import ES -> Analyze -> select journey -> Generate Jest -> select test case -> Run Test -> Report
 ```
 
-If Elasticsearch is not available, use `Import Mock` in the dashboard as the fallback demo path.
+If ShopLite logs are not imported yet, use `Import Mock` in the dashboard as the fallback demo path.
 
 ## Current Repository State
 
@@ -93,17 +99,17 @@ Implemented foundation:
 
 - `apps/web`: Next.js operational dashboard for the logs-to-regression-report demo.
 - `apps/api`: FastAPI app scaffold with mock JSON and Elasticsearch log ingestion.
-- `demo-system`: Express e-commerce modular monolith with login, product, cart, order, payment, request context, structured console logging, and optional Elasticsearch indexing.
+- `../shoplite`: Express + React mini e-commerce system with realistic journeys, JSONL request logs, and regression cases.
 - `packages/shared`: shared TypeScript/Zod schema package.
 - `database/migrations/001_init_logitest_schema.sql`: PostgreSQL schema for sessions, logs, journeys, test cases, artifacts, and runs.
 - `mock-data/logs.json`: fallback e-commerce-like sample logs.
-- `docker-compose.yml`: current stack with `web`, `api`, `database`, `elasticsearch`, and `demo-backend`.
+- `docker-compose.yml`: current LogiTest stack with `web`, `api`, `database`, and `elasticsearch`.
 
 Completed MVP path:
 
 - Journey chaining metadata.
 - Jest + Supertest as default generated artifact.
-- Execution/reporting against the demo backend.
+- Execution/reporting against ShopLite.
 - Operational dashboard replacing the default starter page.
 
 ## Local Development
@@ -129,18 +135,17 @@ cd D:\ViettelDigitalTalent\LogiTest\logitest-ai\apps\web
 npm.cmd run dev
 ```
 
-Run the demo e-commerce backend:
+Run ShopLite backend and frontend:
 
 ```powershell
-cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
-npm.cmd start --workspace demo-system
-```
+cd D:\ViettelDigitalTalent\LogiTest\shoplite
+docker compose up -d
 
-Run the demo backend tests:
+cd D:\ViettelDigitalTalent\LogiTest\shoplite\server
+npm.cmd run dev
 
-```powershell
-cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
-npm.cmd run test:demo
+cd D:\ViettelDigitalTalent\LogiTest\shoplite\client
+npm.cmd run dev
 ```
 
 Run the FastAPI backend:
@@ -169,7 +174,8 @@ Current Docker stack exposes:
 - Web: `http://localhost:3000`
 - API health: `http://localhost:8000/health`
 - PostgreSQL: `localhost:5432`, database `logitest_ai`, user `logitest`, password `logitest`
-- Demo backend: `http://localhost:3001`
+- ShopLite API: `http://localhost:4000`
+- ShopLite frontend: `http://localhost:5173`
 - Elasticsearch: `http://localhost:9200`
 
 Stop the Docker development stack:
@@ -185,11 +191,9 @@ Key local variables:
 
 - `NEXT_PUBLIC_API_BASE_URL`: FastAPI platform URL for the dashboard.
 - `DATABASE_URL`: PostgreSQL connection string.
-- `ELASTICSEARCH_URL`: Elasticsearch URL from API/demo containers.
-- `DEMO_BACKEND_URL`: demo e-commerce backend URL.
-- `STAGING_API_BASE_URL`: target URL for generated test execution.
-- `DEMO_LOG_INDEX`: Elasticsearch index for demo backend logs.
-- `REGRESSION_MODE`: optional demo backend toggle for intentional regression.
+- `ELASTICSEARCH_URL`: Elasticsearch URL from API containers.
+- `STAGING_API_BASE_URL`: target URL for generated test execution, usually ShopLite at `http://localhost:4000`.
+- `DEMO_LOG_INDEX`: Elasticsearch index for imported demo logs.
 
 ## Implementation Plan
 

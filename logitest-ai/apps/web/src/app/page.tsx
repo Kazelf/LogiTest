@@ -1,6 +1,4 @@
 "use client";
-
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -319,15 +317,9 @@ function Header({
         <p className="text-sm font-semibold uppercase text-slate-500">LogiTest AI MVP</p>
         <h1 className="text-3xl font-semibold text-slate-950">Behavior regression dashboard</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          Import API logs, mine journeys, generate Jest/Supertest tests, execute against the demo backend, and inspect
+          Import API logs, mine journeys, generate Jest/Supertest tests, execute against ShopLite, and inspect
           regression diffs from one operational screen.
         </p>
-        <Link
-          className="mt-3 inline-flex h-9 items-center justify-center border border-slate-900 bg-slate-950 px-3 text-sm font-medium text-white hover:bg-slate-800"
-          href="/demo"
-        >
-          Run Web Demo
-        </Link>
       </div>
       <div className="grid grid-cols-4 gap-2 text-center">
         <Metric label="Logs" value={logs} />
@@ -375,7 +367,7 @@ function EmptyState({ label }: { label: string }) {
 
 function LogsPanel({ logs }: { logs: LogItem[] }) {
   if (logs.length === 0) {
-    return <EmptyState label="No logs yet. Run the demo flow and import Elasticsearch, or import mock logs." />;
+    return <EmptyState label="No logs yet. Run ShopLite journeys and import logs, or import mock logs." />;
   }
   return (
     <Panel title="Raw API Logs" subtitle="Latest normalized requests stored by the platform.">
@@ -595,7 +587,7 @@ function RunsPanel({
   selectedRun: TestRun | null;
 }) {
   if (runs.length === 0) {
-    return <EmptyState label="No runs yet. Generate a test case, then run it against the demo backend." />;
+    return <EmptyState label="No runs yet. Generate a test case, then run it against ShopLite." />;
   }
   return (
     <SplitPanel

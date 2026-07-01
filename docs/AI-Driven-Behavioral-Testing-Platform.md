@@ -20,10 +20,10 @@ Sau góp ý của mentor, MVP không cần chứng minh bằng microservices th�
 MVP tập trung vào pipeline có thể demo end-to-end:
 
 ```text
-Postman / demo script
+ShopLite user journey
         |
         v
-Express E-commerce Demo Backend
+ShopLite E-commerce Backend
         |
         | structured API logs
         v
@@ -156,7 +156,6 @@ Dashboard cần hiển thị:
 
 ```text
 logitest-ai/
-  demo-system/        Express e-commerce modular monolith
   apps/api/           FastAPI LogiTest AI modular monolith
   apps/web/           Next.js dashboard
   packages/shared/    Shared TypeScript schemas
@@ -164,6 +163,7 @@ logitest-ai/
   database/           PostgreSQL migrations
   generated-tests/    Generated Jest/Supertest artifacts
   docker-compose.yml  Local demo stack
+../shoplite/          Express + React e-commerce system under test
 ```
 
 Docker Compose mục tiêu:
@@ -172,7 +172,7 @@ Docker Compose mục tiêu:
 services:
   database
   elasticsearch
-  demo-backend
+  shoplite (run separately)
   api
   web
 ```

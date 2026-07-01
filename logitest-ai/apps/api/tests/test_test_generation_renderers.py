@@ -17,7 +17,7 @@ def test_render_jest_supertest_generates_api_script() -> None:
     code = renderers.render_script(framework=GeneratedTestFramework.JEST_SUPERTEST, test_case=_test_case())
 
     assert 'import request from "supertest";' in code
-    assert 'const baseURL = process.env.TARGET_BASE_URL || "http://localhost:3001";' in code
+    assert 'const baseURL = process.env.TARGET_BASE_URL || "http://localhost:4000";' in code
     assert '.post("/auth/login")' in code
     assert 'expect(step1.status).toBe(200);' in code
     assert 'expect(step1.body).toHaveProperty("token");' in code

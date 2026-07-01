@@ -40,12 +40,12 @@ def test_run_test_case_replays_steps_extracts_variables_and_persists_pass(monkey
     monkeypatch.setattr(service.connection, "connect", lambda: fake_connection)
     monkeypatch.setattr(service.httpx, "Client", lambda timeout: fake_client)
 
-    run = service.run_test_case("test-case-id", target_base_url="http://demo.local", timeout_seconds=3)
+    run = service.run_test_case("test-case-id", target_base_url="http://shoplite.local", timeout_seconds=3)
 
     assert run["status"] == "passed"
     assert fake_connection.committed is True
-    assert fake_client.requests[0] == ("POST", "http://demo.local/api/orders", {})
-    assert fake_client.requests[1] == ("GET", "http://demo.local/api/orders/order-new", None)
+    assert fake_client.requests[0] == ("POST", "http://shoplite.local/api/orders", {})
+    assert fake_client.requests[1] == ("GET", "http://shoplite.local/api/orders/order-new", None)
     insert_sql, insert_params = fake_connection.cursor_instance.insert_execution
     assert "INSERT INTO test_runs" in insert_sql
     assert insert_params[1] == "passed"
