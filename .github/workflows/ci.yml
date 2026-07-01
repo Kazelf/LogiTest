@@ -38,6 +38,12 @@ jobs:
       - name: Install workspace dependencies
         run: npm ci
 
+      - name: Restore Linux native CSS bindings
+        run: |
+          npm rebuild --workspace web
+          npm install --no-save --no-package-lock --workspace web lightningcss-linux-x64-gnu@1.32.0
+          npm rebuild --workspace web lightningcss
+
       - name: Build shared package
         run: npm run build:shared
 
