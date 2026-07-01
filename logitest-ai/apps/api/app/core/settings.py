@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     elasticsearch_url: str = "http://localhost:9200"
     demo_log_index: str = "logitest-demo-logs"
     staging_api_base_url: str = "http://localhost:4000"
+    shoplite_log_path: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

@@ -211,6 +211,11 @@ export default function Home() {
               />
               <ActionButton
                 disabled={Boolean(busy)}
+                label="Import ShopLite"
+                onClick={() => runAction("Import ShopLite logs", api.importShopLiteLogs)}
+              />
+              <ActionButton
+                disabled={Boolean(busy)}
                 label="Import ES"
                 onClick={() => runAction("Import Elasticsearch logs", api.importElasticsearchLogs)}
               />

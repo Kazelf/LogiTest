@@ -88,10 +88,10 @@ npm run dev
 Open `http://localhost:3000`, then use:
 
 ```text
-Import ES -> Analyze -> select journey -> Generate Jest -> select test case -> Run Test -> Report
+Import ShopLite -> Analyze -> select journey -> Generate Jest -> select test case -> Run Test -> Report
 ```
 
-If ShopLite logs are not imported yet, use `Import Mock` in the dashboard as the fallback demo path.
+If ShopLite logs are not available yet, use `Import Mock` in the dashboard as the fallback demo path.
 
 ## Current Repository State
 
@@ -192,6 +192,7 @@ Key local variables:
 - `NEXT_PUBLIC_API_BASE_URL`: FastAPI platform URL for the dashboard.
 - `DATABASE_URL`: PostgreSQL connection string.
 - `ELASTICSEARCH_URL`: Elasticsearch URL from API containers.
+- `SHOPLITE_LOG_PATH`: JSONL file path for the ShopLite log bridge.
 - `STAGING_API_BASE_URL`: target URL for generated test execution, usually ShopLite at `http://localhost:4000`.
 - `DEMO_LOG_INDEX`: Elasticsearch index for imported demo logs.
 

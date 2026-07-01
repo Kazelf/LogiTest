@@ -25,6 +25,12 @@ py -m venv .venv
 
 ## Logs API
 
+Import ShopLite JSONL request logs into PostgreSQL:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:8000/api/logs/import-shoplite
+```
+
 Import the bundled mock log dataset into PostgreSQL:
 
 ```powershell

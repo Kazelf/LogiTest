@@ -50,6 +50,7 @@ export type ListResponse<T> = {
 export type ImportResponse = {
   source: string;
   index?: string;
+  path?: string;
   loaded_records: number;
   imported_logs?: number;
   sessions: number;
@@ -186,6 +187,7 @@ export type TestRun = {
 
 export const api = {
   importMockLogs: () => request<ImportResponse>("/api/logs/import-mock", { method: "POST" }),
+  importShopLiteLogs: () => request<ImportResponse>("/api/logs/import-shoplite", { method: "POST" }),
   importElasticsearchLogs: () =>
     request<ImportResponse>("/api/logs/import-elasticsearch", {
       method: "POST",

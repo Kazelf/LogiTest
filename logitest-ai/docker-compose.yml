@@ -40,6 +40,7 @@ services:
       DATABASE_URL: postgresql://logitest:logitest@database:5432/logitest_ai
       ELASTICSEARCH_URL: http://elasticsearch:9200
       DEMO_LOG_INDEX: logitest-demo-logs
+      SHOPLITE_LOG_PATH: /shoplite-logs/request-logs.jsonl
       STAGING_API_BASE_URL: http://host.docker.internal:4000
     ports:
       - "8000:8000"
@@ -48,6 +49,7 @@ services:
       - ./scripts:/app/scripts
       - ./mock-data:/app/mock-data
       - ./generated-tests:/app/generated-tests
+      - ../shoplite/server/logs:/shoplite-logs
     depends_on:
       database:
         condition: service_healthy
