@@ -126,6 +126,14 @@ function App() {
     }
   }
 
+  async function openProduct(productId) {
+    const detail = await run(() => api(`/api/products/${productId}`));
+    if (detail) {
+      setSelectedProduct(detail);
+      setView("detail");
+    }
+  }
+
   async function openOrder(orderId) {
     const detail = await run(() => api(`/api/orders/${orderId}`));
     if (detail) {
@@ -168,7 +176,7 @@ function App() {
             categories={categories}
             brands={brands}
             onSearch={loadProducts}
-            onSelect={(product) => { setSelectedProduct(product); setView("detail"); }}
+            onSelect={(product) => openProduct(product.product_id)}
             onAdd={addToCart}
           />
         )}

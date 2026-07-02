@@ -68,6 +68,10 @@ export type LogItem = {
   method: string | null;
   endpoint: string | null;
   status_code: number | null;
+  action_type: string;
+  request_payload: Record<string, unknown>;
+  response_body: Record<string, unknown>;
+  raw_log: Record<string, unknown>;
   response_time_ms: number | null;
   occurred_at: string;
 };
@@ -187,7 +191,6 @@ export type TestRun = {
 
 export const api = {
   importMockLogs: () => request<ImportResponse>("/api/logs/import-mock", { method: "POST" }),
-  importShopLiteLogs: () => request<ImportResponse>("/api/logs/import-shoplite", { method: "POST" }),
   importElasticsearchLogs: () =>
     request<ImportResponse>("/api/logs/import-elasticsearch", {
       method: "POST",

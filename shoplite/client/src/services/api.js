@@ -8,6 +8,10 @@ function sessionId() {
   return next;
 }
 
+function traceId() {
+  return localStorage.getItem("shoplite_trace_id");
+}
+
 export function getToken() {
   return localStorage.getItem("shoplite_token");
 }
@@ -23,6 +27,9 @@ export async function api(path, options = {}) {
     "x-session-id": sessionId(),
     ...(options.headers || {})
   };
+  const existingTraceId = traceId();
+  if (existingTraceId) headers["x-trace-id"] = existingTraceId;
+
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -31,6 +38,11 @@ export async function api(path, options = {}) {
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined
   });
+  const responseSessionId = response.headers.get("x-session-id");
+  const responseTraceId = response.headers.get("x-trace-id");
+  if (responseSessionId) localStorage.setItem("shoplite_session_id", responseSessionId);
+  if (responseTraceId) localStorage.setItem("shoplite_trace_id", responseTraceId);
+
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(payload.message || "API request failed");

@@ -211,11 +211,6 @@ export default function Home() {
               />
               <ActionButton
                 disabled={Boolean(busy)}
-                label="Import ShopLite"
-                onClick={() => runAction("Import ShopLite logs", api.importShopLiteLogs)}
-              />
-              <ActionButton
-                disabled={Boolean(busy)}
                 label="Import ES"
                 onClick={() => runAction("Import Elasticsearch logs", api.importElasticsearchLogs)}
               />
@@ -371,23 +366,92 @@ function EmptyState({ label }: { label: string }) {
 }
 
 function LogsPanel({ logs }: { logs: LogItem[] }) {
+  const [selectedLog, setSelectedLog] = useState<LogItem | null>(null);
+
   if (logs.length === 0) {
     return <EmptyState label="No logs yet. Run ShopLite journeys and import logs, or import mock logs." />;
   }
-  return (
+
+  const table = (
     <Panel title="Raw API Logs" subtitle="Latest normalized requests stored by the platform.">
-      <Table
-        headers={["Time", "Session", "Method", "Endpoint", "Status", "Latency"]}
-        rows={logs.map((log) => [
-          formatDate(log.occurred_at),
-          log.session_external_id ?? "n/a",
-          log.method ?? "n/a",
-          log.endpoint ?? "n/a",
-          <Badge key={log.id} value={log.status_code ?? "n/a"} />,
-          log.response_time_ms === null ? "n/a" : `${log.response_time_ms} ms`,
-        ])}
-      />
+      <div className="overflow-x-auto">
+        <table className="min-w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase text-slate-500">
+              {["Time", "Session", "Action", "Method", "Endpoint", "Status", "Latency"].map((header) => (
+                <th className="px-3 py-2 font-semibold" key={header}>
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((log) => (
+              <tr
+                className={`cursor-pointer border-b border-slate-100 align-top last:border-0 hover:bg-slate-50 ${
+                  selectedLog?.id === log.id ? "bg-slate-100" : ""
+                }`}
+                key={log.id}
+                onClick={() => setSelectedLog(log)}
+              >
+                <td className="max-w-[180px] px-3 py-2">{formatDate(log.occurred_at)}</td>
+                <td className="max-w-[220px] break-all px-3 py-2 font-mono text-xs">
+                  {log.session_external_id ?? "n/a"}
+                </td>
+                <td className="max-w-[180px] px-3 py-2">
+                  <Badge value={log.action_type || "unknown"} />
+                </td>
+                <td className="max-w-[90px] px-3 py-2 font-mono">{log.method ?? "n/a"}</td>
+                <td className="max-w-[280px] break-all px-3 py-2">{log.endpoint ?? "n/a"}</td>
+                <td className="max-w-[90px] px-3 py-2">
+                  <Badge value={log.status_code ?? "n/a"} />
+                </td>
+                <td className="max-w-[110px] px-3 py-2">
+                  {log.response_time_ms === null ? "n/a" : `${log.response_time_ms} ms`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </Panel>
+  );
+
+  if (!selectedLog) {
+    return table;
+  }
+
+  return (
+    <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+      {table}
+      <Detail title="Log detail">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="break-all font-mono text-xs text-slate-500">{selectedLog.id}</p>
+            <p className="mt-1 break-all text-sm font-semibold text-slate-950">
+              {selectedLog.method ?? "n/a"} {selectedLog.endpoint ?? "n/a"}
+            </p>
+          </div>
+          <button
+            aria-label="Close log detail"
+            className="h-8 w-8 border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+            onClick={() => setSelectedLog(null)}
+            type="button"
+          >
+            X
+          </button>
+        </div>
+        <KeyValue label="Session" value={selectedLog.session_external_id ?? "n/a"} />
+        <KeyValue label="Trace" value={selectedLog.trace_id ?? "n/a"} />
+        <KeyValue label="User" value={selectedLog.user_id ?? "n/a"} />
+        <KeyValue label="Service" value={selectedLog.service_name} />
+        <KeyValue label="Action" value={selectedLog.action_type || "unknown"} />
+        <KeyValue label="Status" value={String(selectedLog.status_code ?? "n/a")} />
+        <JsonBlock title="Request payload" value={selectedLog.request_payload} />
+        <JsonBlock title="Response body" value={selectedLog.response_body} />
+        <JsonBlock title="Raw log" value={selectedLog.raw_log} />
+      </Detail>
+    </section>
   );
 }
 

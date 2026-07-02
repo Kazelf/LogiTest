@@ -158,6 +158,10 @@ def list_logs(*, limit: int, offset: int, filters: LogFilters) -> dict[str, Any]
             logs.method,
             logs.endpoint,
             logs.status_code,
+            logs.action_type,
+            logs.request_payload,
+            logs.response_body,
+            logs.raw_log,
             logs.response_time_ms,
             logs.occurred_at
         FROM logs

@@ -145,6 +145,14 @@ def test_list_logs_returns_paginated_items(monkeypatch) -> None:
                 "method": "POST",
                 "endpoint": "/auth/login",
                 "status_code": 200,
+                "action_type": "login",
+                "request_payload": {"email": "buyer@example.com"},
+                "response_body": {"status": "ok"},
+                "raw_log": {
+                    "action_name": "LOGIN",
+                    "request_payload": {"email": "buyer@example.com"},
+                    "response_body": {"status": "ok"},
+                },
                 "response_time_ms": 82,
                 "occurred_at": "2026-06-23T09:00:00Z",
             }

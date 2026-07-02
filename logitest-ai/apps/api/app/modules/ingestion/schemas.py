@@ -44,6 +44,10 @@ class LogListItem(BaseModel):
     method: str | None
     endpoint: str | None
     status_code: int | None
+    action_type: str
+    request_payload: dict[str, Any]
+    response_body: dict[str, Any]
+    raw_log: dict[str, Any]
     response_time_ms: int | None
     occurred_at: datetime
 
