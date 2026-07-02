@@ -29,7 +29,7 @@ class PersonaListItem(BaseModel):
 
 class PersonaListResponse(BaseModel):
     items: list[PersonaListItem]
-    limit: int = Field(ge=1, le=200)
+    limit: int = Field(ge=1, le=500)
     offset: int = Field(ge=0)
     total: int
 
@@ -56,6 +56,6 @@ class JourneyListItem(BaseModel):
 
 class JourneyListResponse(BaseModel):
     items: list[JourneyListItem]
-    limit: int = Field(ge=1, le=200)
+    limit: int = Field(ge=1, le=500)
     offset: int = Field(ge=0)
     total: int

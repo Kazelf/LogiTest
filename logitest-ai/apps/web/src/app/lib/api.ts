@@ -55,6 +55,9 @@ export type ImportResponse = {
   imported_logs?: number;
   sessions: number;
   counts: Record<string, number>;
+  limit?: number | null;
+  page_size?: number;
+  new_only?: boolean;
 };
 
 export type LogItem = {
@@ -189,20 +192,29 @@ export type TestRun = {
   created_at: string | null;
 };
 
+export type PageQuery = {
+  limit: number;
+  offset: number;
+};
+
 export const api = {
   importMockLogs: () => request<ImportResponse>("/api/logs/import-mock", { method: "POST" }),
-  importElasticsearchLogs: () =>
+  importElasticsearchLogs: (options: { newOnly?: boolean; limit?: number | null } = {}) =>
     request<ImportResponse>("/api/logs/import-elasticsearch", {
       method: "POST",
-      body: JSON.stringify({ limit: 200 }),
+      body: JSON.stringify({
+        limit: options.limit ?? null,
+        page_size: 500,
+        new_only: options.newOnly ?? true,
+      }),
     }),
-  listLogs: () => request<ListResponse<LogItem>>("/api/logs", { query: { limit: 50 } }),
-  listSessions: () =>
-    request<ListResponse<SessionItem>>("/api/logs/sessions", { query: { limit: 50 } }),
+  listLogs: (page: PageQuery) => request<ListResponse<LogItem>>("/api/logs", { query: page }),
+  listSessions: (page: PageQuery) =>
+    request<ListResponse<SessionItem>>("/api/logs/sessions", { query: page }),
   getSession: (sessionId: string) => request<SessionDetail>(`/api/logs/sessions/${sessionId}`),
   analyzeJourneys: () => request<AnalyzeResponse>("/api/behavior/analyze", { method: "POST" }),
-  listJourneys: () =>
-    request<ListResponse<JourneyItem>>("/api/behavior/journeys", { query: { limit: 50 } }),
+  listJourneys: (page: PageQuery) =>
+    request<ListResponse<JourneyItem>>("/api/behavior/journeys", { query: page }),
   generateTest: (journeyId: string) =>
     request<GenerateResponse>("/api/test-generation/generate", {
       method: "POST",
@@ -213,9 +225,9 @@ export const api = {
         write_files: false,
       }),
     }),
-  listTestCases: () =>
+  listTestCases: (page: PageQuery) =>
     request<ListResponse<TestCaseItem>>("/api/test-generation/test-cases", {
-      query: { limit: 50 },
+      query: page,
     }),
   getTestCase: (testCaseId: string) =>
     request<TestCaseDetail>(`/api/test-generation/test-cases/${testCaseId}`),
@@ -228,7 +240,7 @@ export const api = {
         timeout_seconds: 10,
       }),
     }),
-  listRuns: () =>
-    request<ListResponse<TestRun>>("/api/reports/test-runs", { query: { limit: 50 } }),
+  listRuns: (page: PageQuery) =>
+    request<ListResponse<TestRun>>("/api/reports/test-runs", { query: page }),
   getRun: (runId: string) => request<TestRun>(`/api/reports/test-runs/${runId}`),
 };

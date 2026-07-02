@@ -187,7 +187,7 @@ def test_get_test_case_detail_returns_json_spec(monkeypatch) -> None:
 
 def test_test_case_routes_validate_pagination_bounds() -> None:
     assert client.get("/api/test-generation/test-cases", params={"limit": 0}).status_code == 422
-    assert client.get("/api/test-generation/test-cases", params={"limit": 201}).status_code == 422
+    assert client.get("/api/test-generation/test-cases", params={"limit": 501}).status_code == 422
     assert client.get("/api/test-generation/test-cases", params={"offset": -1}).status_code == 422
 
 

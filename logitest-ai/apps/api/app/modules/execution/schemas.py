@@ -38,6 +38,6 @@ class TestRunResponse(BaseModel):
 
 class TestRunListResponse(BaseModel):
     items: list[TestRunResponse]
-    limit: int = Field(ge=1, le=200)
+    limit: int = Field(ge=1, le=500)
     offset: int = Field(ge=0)
     total: int

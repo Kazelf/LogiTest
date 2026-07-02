@@ -86,11 +86,18 @@ def import_mock_logs_from_dataset() -> dict[str, Any]:
 
 def import_elasticsearch_logs(request: ImportElasticsearchLogsRequest) -> dict[str, Any]:
     index = request.index or settings.demo_log_index
+    start_time = request.start_time
+    if request.new_only and start_time is None:
+        start_time = _latest_imported_log_timestamp(index)
+    start_exclusive = request.new_only and request.start_time is None and start_time is not None
+
     hits = elasticsearch_client.search_logs(
         index=index,
-        start_time=request.start_time,
+        start_time=start_time,
         end_time=request.end_time,
         limit=request.limit,
+        page_size=request.page_size,
+        start_exclusive=start_exclusive,
     )
     records = [_normalize_elasticsearch_hit(hit, index=index) for hit in hits]
     grouped_records = _group_normalized_records(records)
@@ -108,6 +115,9 @@ def import_elasticsearch_logs(request: ImportElasticsearchLogsRequest) -> dict[s
         "imported_logs": len(records),
         "sessions": len(grouped_records),
         "counts": counts,
+        "limit": request.limit,
+        "page_size": request.page_size,
+        "new_only": request.new_only,
     }
 
 
@@ -627,6 +637,12 @@ def _fetch_ingestion_counts(conn: psycopg.Connection) -> dict[str, int]:
             cur.execute(f"SELECT COUNT(*) FROM {table}")
             counts[table] = int(cur.fetchone()[0])
     return counts
+
+def _latest_imported_log_timestamp(index: str) -> datetime | None:
+    with connection.connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT MAX(occurred_at) FROM logs WHERE source_index = %s", [index])
+            return cur.fetchone()[0]
 
 def _build_log_filters(filters: LogFilters) -> tuple[str, list[Any]]:
     clauses: list[str] = []

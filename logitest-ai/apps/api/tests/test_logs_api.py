@@ -50,6 +50,9 @@ def test_import_elasticsearch_logs_returns_summary(monkeypatch) -> None:
         "imported_logs": 2,
         "sessions": 1,
         "counts": {"sessions": 1, "logs": 2},
+        "limit": 25,
+        "page_size": 500,
+        "new_only": False,
     }
 
     def fake_import(request: ImportElasticsearchLogsRequest) -> dict:
@@ -69,7 +72,8 @@ def test_import_elasticsearch_logs_returns_summary(monkeypatch) -> None:
 
 def test_import_elasticsearch_logs_validates_limit_bounds() -> None:
     assert client.post("/api/logs/import-elasticsearch", json={"limit": 0}).status_code == 422
-    assert client.post("/api/logs/import-elasticsearch", json={"limit": 1001}).status_code == 422
+    assert client.post("/api/logs/import-elasticsearch", json={"limit": 10001}).status_code == 422
+    assert client.post("/api/logs/import-elasticsearch", json={"page_size": 1001}).status_code == 422
 
 def test_import_elasticsearch_logs_maps_database_errors(monkeypatch) -> None:
     def raise_database_error(request: ImportElasticsearchLogsRequest) -> None:
@@ -184,7 +188,7 @@ def test_list_logs_returns_paginated_items(monkeypatch) -> None:
 
 def test_list_logs_validates_limit_bounds() -> None:
     assert client.get("/api/logs", params={"limit": 0}).status_code == 422
-    assert client.get("/api/logs", params={"limit": 201}).status_code == 422
+    assert client.get("/api/logs", params={"limit": 501}).status_code == 422
 
 
 def test_list_logs_validates_offset_bounds() -> None:
@@ -244,7 +248,7 @@ def test_list_sessions_returns_grouped_summaries(monkeypatch) -> None:
 
 def test_list_sessions_validates_pagination_bounds() -> None:
     assert client.get("/api/logs/sessions", params={"limit": 0}).status_code == 422
-    assert client.get("/api/logs/sessions", params={"limit": 201}).status_code == 422
+    assert client.get("/api/logs/sessions", params={"limit": 501}).status_code == 422
     assert client.get("/api/logs/sessions", params={"offset": -1}).status_code == 422
 
 
