@@ -124,10 +124,10 @@ def test_list_personas_returns_paginated_items(monkeypatch) -> None:
 
 def test_behavior_list_routes_validate_pagination_bounds() -> None:
     assert client.get("/api/behavior/journeys", params={"limit": 0}).status_code == 422
-    assert client.get("/api/behavior/journeys", params={"limit": 201}).status_code == 422
+    assert client.get("/api/behavior/journeys", params={"limit": 501}).status_code == 422
     assert client.get("/api/behavior/journeys", params={"offset": -1}).status_code == 422
     assert client.get("/api/behavior/personas", params={"limit": 0}).status_code == 422
-    assert client.get("/api/behavior/personas", params={"limit": 201}).status_code == 422
+    assert client.get("/api/behavior/personas", params={"limit": 501}).status_code == 422
     assert client.get("/api/behavior/personas", params={"offset": -1}).status_code == 422
 
 

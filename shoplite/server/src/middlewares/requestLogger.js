@@ -7,7 +7,15 @@ const { indexRequestLog } = require("../config/elasticsearchLogger");
 const { getLogMetadata } = require("../modules/logs/logMetadata");
 
 const logPath = path.join(__dirname, "..", "..", "logs", "request-logs.jsonl");
-const sensitiveFields = new Set(["password", "passwordHash", "accessToken", "refreshToken", "authorization", "token"]);
+const sensitiveFields = new Set([
+  "password",
+  "passwordhash",
+  "accesstoken",
+  "refreshtoken",
+  "authorization",
+  "token",
+  "secret"
+]);
 
 function maskSensitive(value) {
   if (Array.isArray(value)) return value.map(maskSensitive);
@@ -16,7 +24,7 @@ function maskSensitive(value) {
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
-      sensitiveFields.has(key) ? "***MASKED***" : maskSensitive(item)
+      sensitiveFields.has(key.toLowerCase()) ? "***MASKED***" : maskSensitive(item)
     ])
   );
 }
@@ -39,13 +47,15 @@ function requestLogger(req, res, next) {
 
   res.on("finish", async () => {
     const responseTimeMs = Date.now() - startedAt;
+    const requestBody = req.body && Object.keys(req.body).length > 0 ? req.body : {};
     const sanitizedRequestBody = maskSensitive({
-      ...req.body,
+      ...requestBody,
       authorization: req.headers.authorization
     });
     const sanitizedResponseBody = maskSensitive(responseBody);
     const matchedPath = normalizeMatchedPath(req.route?.path ? req.baseUrl + req.route.path : req.path);
-    const metadata = getLogMetadata(req.method, matchedPath, sanitizedResponseBody);
+    const responseBodySummary = summarizeResponseBody(req.method, matchedPath, sanitizedResponseBody);
+    const metadata = getLogMetadata(req.method, matchedPath, req.query, responseBodySummary);
 
     const logRecord = {
       timestamp: new Date().toISOString(),
@@ -55,12 +65,15 @@ function requestLogger(req, res, next) {
       trace_id: traceId,
       user_id: req.user?.id || null,
       method: req.method,
-      endpoint: req.originalUrl.split("?")[0],
+      endpoint: matchedPath,
+      path_params: maskSensitive(req.params || {}),
+      query: maskSensitive(req.query || {}),
       request_body: sanitizedRequestBody,
       response_status: res.statusCode,
-      response_body: sanitizedResponseBody,
+      response_body_summary: responseBodySummary,
+      response_body: responseBodySummary,
       response_time_ms: responseTimeMs,
-      error_code: sanitizedResponseBody?.error_code || null,
+      error_code: responseBodySummary?.error_code || sanitizedResponseBody?.error_code || null,
       ...metadata
     };
 
@@ -84,7 +97,7 @@ function requestLogger(req, res, next) {
           endpoint: logRecord.endpoint,
           requestBody: logRecord.request_body,
           responseStatus: logRecord.response_status,
-          responseBody: logRecord.response_body,
+          responseBody: logRecord.response_body_summary,
           responseTimeMs: logRecord.response_time_ms,
           errorCode: logRecord.error_code,
           actionName: logRecord.action_name,
@@ -106,4 +119,30 @@ function normalizeMatchedPath(routePath) {
   return routePath.endsWith("/") ? routePath.slice(0, -1) : routePath;
 }
 
-module.exports = { requestLogger, maskSensitive };
+function summarizeResponseBody(method, matchedPath, body) {
+  if (!body || typeof body !== "object") return body || {};
+
+  if (method === "GET" && matchedPath === "/api/products" && Array.isArray(body.products)) {
+    const firstProduct = body.products[0] || null;
+    return {
+      result_count: Number.isInteger(body.count) ? body.count : body.products.length,
+      first_result_id: firstProduct?.product_id || null,
+      first_result_name: firstProduct?.name || null
+    };
+  }
+
+  if (method === "GET" && matchedPath === "/api/products/:id") {
+    return {
+      product_id: body.product_id || null,
+      product_name: body.name || null,
+      brand: body.brand || null,
+      category: body.category || null,
+      price: body.price ?? null,
+      stock: body.stock ?? null
+    };
+  }
+
+  return body;
+}
+
+module.exports = { requestLogger, maskSensitive, summarizeResponseBody };

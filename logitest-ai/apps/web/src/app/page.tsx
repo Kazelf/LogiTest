@@ -17,9 +17,16 @@ import {
 } from "./lib/api";
 
 const TABS = ["Logs", "Sessions", "Journeys", "Test Cases", "Runs", "Report"] as const;
+const LOG_PAGE_SIZE = 100;
+const LIST_PAGE_SIZE = 100;
 
 type Tab = (typeof TABS)[number];
 type Notice = { type: "ok" | "error"; text: string } | null;
+type PaginationState = { limit: number; offset: number };
+type PaginationProps = PaginationState & {
+  total: number;
+  onPageChange: (offset: number) => void;
+};
 
 function formatDate(value: string | null | undefined) {
   if (!value) {
@@ -46,6 +53,22 @@ function statusClass(status: string | number | null | undefined) {
     return "border-rose-200 bg-rose-50 text-rose-700";
   }
   return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function pageRange({ limit, offset, total }: PaginationState & { total: number }) {
+  if (total === 0) {
+    return "0 of 0";
+  }
+  const start = offset + 1;
+  const end = Math.min(offset + limit, total);
+  return `${start}-${end} of ${total}`;
+}
+
+function keepSelection<T>(current: string, items: T[], getId: (item: T) => string) {
+  if (items.some((item) => getId(item) === current)) {
+    return current;
+  }
+  return items[0] ? getId(items[0]) : "";
 }
 
 function getArtifact(testCase: TestCaseDetail | null): ArtifactDetail | null {
@@ -79,6 +102,16 @@ export default function Home() {
   const [journeys, setJourneys] = useState<JourneyItem[]>([]);
   const [testCases, setTestCases] = useState<TestCaseItem[]>([]);
   const [runs, setRuns] = useState<TestRun[]>([]);
+  const [logPage, setLogPage] = useState<PaginationState>({ limit: LOG_PAGE_SIZE, offset: 0 });
+  const [sessionPage, setSessionPage] = useState<PaginationState>({ limit: LIST_PAGE_SIZE, offset: 0 });
+  const [journeyPage, setJourneyPage] = useState<PaginationState>({ limit: LIST_PAGE_SIZE, offset: 0 });
+  const [testCasePage, setTestCasePage] = useState<PaginationState>({ limit: LIST_PAGE_SIZE, offset: 0 });
+  const [runPage, setRunPage] = useState<PaginationState>({ limit: LIST_PAGE_SIZE, offset: 0 });
+  const [logTotal, setLogTotal] = useState(0);
+  const [sessionTotal, setSessionTotal] = useState(0);
+  const [journeyTotal, setJourneyTotal] = useState(0);
+  const [testCaseTotal, setTestCaseTotal] = useState(0);
+  const [runTotal, setRunTotal] = useState(0);
   const [selectedSessionId, setSelectedSessionId] = useState<string>("");
   const [selectedJourneyId, setSelectedJourneyId] = useState<string>("");
   const [selectedTestCaseId, setSelectedTestCaseId] = useState<string>("");
@@ -103,22 +136,29 @@ export default function Home() {
 
   const loadLists = useCallback(async () => {
     const [logList, sessionList, journeyList, testCaseList, runList] = await Promise.all([
-      api.listLogs(),
-      api.listSessions(),
-      api.listJourneys(),
-      api.listTestCases(),
-      api.listRuns(),
+      api.listLogs(logPage),
+      api.listSessions(sessionPage),
+      api.listJourneys(journeyPage),
+      api.listTestCases(testCasePage),
+      api.listRuns(runPage),
     ]);
     setLogs(logList.items);
     setSessions(sessionList.items);
     setJourneys(journeyList.items);
     setTestCases(testCaseList.items);
     setRuns(runList.items);
-    setSelectedSessionId((current) => current || sessionList.items[0]?.external_session_id || "");
-    setSelectedJourneyId((current) => current || journeyList.items[0]?.id || "");
-    setSelectedTestCaseId((current) => current || testCaseList.items[0]?.id || "");
-    setSelectedRunId((current) => current || runList.items[0]?.id || "");
-  }, []);
+    setLogTotal(logList.total);
+    setSessionTotal(sessionList.total);
+    setJourneyTotal(journeyList.total);
+    setTestCaseTotal(testCaseList.total);
+    setRunTotal(runList.total);
+    setSelectedSessionId((current) =>
+      keepSelection(current, sessionList.items, (session) => session.external_session_id),
+    );
+    setSelectedJourneyId((current) => keepSelection(current, journeyList.items, (journey) => journey.id));
+    setSelectedTestCaseId((current) => keepSelection(current, testCaseList.items, (testCase) => testCase.id));
+    setSelectedRunId((current) => keepSelection(current, runList.items, (run) => run.id));
+  }, [journeyPage, logPage, runPage, sessionPage, testCasePage]);
 
   const runAction = useCallback(async (label: string, action: () => Promise<unknown>) => {
     setBusy(label);
@@ -144,11 +184,11 @@ export default function Home() {
   useEffect(() => {
     let ignore = false;
     Promise.all([
-      api.listLogs(),
-      api.listSessions(),
-      api.listJourneys(),
-      api.listTestCases(),
-      api.listRuns(),
+      api.listLogs(logPage),
+      api.listSessions(sessionPage),
+      api.listJourneys(journeyPage),
+      api.listTestCases(testCasePage),
+      api.listRuns(runPage),
     ])
       .then(([logList, sessionList, journeyList, testCaseList, runList]) => {
         if (ignore) {
@@ -159,10 +199,17 @@ export default function Home() {
         setJourneys(journeyList.items);
         setTestCases(testCaseList.items);
         setRuns(runList.items);
-        setSelectedSessionId(sessionList.items[0]?.external_session_id || "");
-        setSelectedJourneyId(journeyList.items[0]?.id || "");
-        setSelectedTestCaseId(testCaseList.items[0]?.id || "");
-        setSelectedRunId(runList.items[0]?.id || "");
+        setLogTotal(logList.total);
+        setSessionTotal(sessionList.total);
+        setJourneyTotal(journeyList.total);
+        setTestCaseTotal(testCaseList.total);
+        setRunTotal(runList.total);
+        setSelectedSessionId((current) =>
+          keepSelection(current, sessionList.items, (session) => session.external_session_id),
+        );
+        setSelectedJourneyId((current) => keepSelection(current, journeyList.items, (journey) => journey.id));
+        setSelectedTestCaseId((current) => keepSelection(current, testCaseList.items, (testCase) => testCase.id));
+        setSelectedRunId((current) => keepSelection(current, runList.items, (run) => run.id));
       })
       .catch((error) => {
         if (ignore) {
@@ -176,7 +223,7 @@ export default function Home() {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [journeyPage, logPage, runPage, sessionPage, testCasePage]);
 
   useEffect(() => {
     if (selectedSessionId) {
@@ -199,7 +246,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#f6f7f9] text-slate-950">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <Header logs={logs.length} journeys={journeys.length} tests={testCases.length} runs={runs.length} />
+        <Header logs={logTotal} journeys={journeyTotal} tests={testCaseTotal} runs={runTotal} />
 
         <section className="grid gap-4 border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1.6fr_1fr]">
           <div>
@@ -211,13 +258,17 @@ export default function Home() {
               />
               <ActionButton
                 disabled={Boolean(busy)}
-                label="Import ShopLite"
-                onClick={() => runAction("Import ShopLite logs", api.importShopLiteLogs)}
+                label="Import ES New"
+                onClick={() =>
+                  runAction("Import new Elasticsearch logs", () => api.importElasticsearchLogs({ newOnly: true }))
+                }
               />
               <ActionButton
                 disabled={Boolean(busy)}
-                label="Import ES"
-                onClick={() => runAction("Import Elasticsearch logs", api.importElasticsearchLogs)}
+                label="Import ES All"
+                onClick={() =>
+                  runAction("Import all Elasticsearch logs", () => api.importElasticsearchLogs({ newOnly: false }))
+                }
               />
               <ActionButton
                 disabled={Boolean(busy)}
@@ -270,10 +321,24 @@ export default function Home() {
           ))}
         </nav>
 
-        {activeTab === "Logs" ? <LogsPanel logs={logs} /> : null}
+        {activeTab === "Logs" ? (
+          <LogsPanel
+            logs={logs}
+            pagination={{
+              ...logPage,
+              total: logTotal,
+              onPageChange: (offset) => setLogPage((current) => ({ ...current, offset })),
+            }}
+          />
+        ) : null}
         {activeTab === "Sessions" ? (
           <SessionsPanel
             detail={sessionDetail}
+            pagination={{
+              ...sessionPage,
+              total: sessionTotal,
+              onPageChange: (offset) => setSessionPage((current) => ({ ...current, offset })),
+            }}
             selectedId={selectedSessionId}
             sessions={sessions}
             onSelect={setSelectedSessionId}
@@ -283,6 +348,11 @@ export default function Home() {
           <JourneysPanel
             journey={selectedJourney}
             journeys={journeys}
+            pagination={{
+              ...journeyPage,
+              total: journeyTotal,
+              onPageChange: (offset) => setJourneyPage((current) => ({ ...current, offset })),
+            }}
             selectedId={selectedJourneyId}
             onSelect={setSelectedJourneyId}
           />
@@ -291,13 +361,28 @@ export default function Home() {
           <TestCasesPanel
             artifact={artifact}
             detail={testCaseDetail}
+            pagination={{
+              ...testCasePage,
+              total: testCaseTotal,
+              onPageChange: (offset) => setTestCasePage((current) => ({ ...current, offset })),
+            }}
             selectedId={selectedTestCaseId}
             testCases={testCases}
             onSelect={setSelectedTestCaseId}
           />
         ) : null}
         {activeTab === "Runs" ? (
-          <RunsPanel runs={runs} selectedId={selectedRunId} selectedRun={selectedRun} onSelect={setSelectedRunId} />
+          <RunsPanel
+            runs={runs}
+            pagination={{
+              ...runPage,
+              total: runTotal,
+              onPageChange: (offset) => setRunPage((current) => ({ ...current, offset })),
+            }}
+            selectedId={selectedRunId}
+            selectedRun={selectedRun}
+            onSelect={setSelectedRunId}
+          />
         ) : null}
         {activeTab === "Report" ? <ReportPanel latestRun={latestRun} selectedRun={selectedRun} /> : null}
       </div>
@@ -370,61 +455,139 @@ function EmptyState({ label }: { label: string }) {
   return <div className="border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">{label}</div>;
 }
 
-function LogsPanel({ logs }: { logs: LogItem[] }) {
-  if (logs.length === 0) {
+function LogsPanel({ logs, pagination }: { logs: LogItem[]; pagination: PaginationProps }) {
+  const [selectedLog, setSelectedLog] = useState<LogItem | null>(null);
+
+  if (pagination.total === 0) {
     return <EmptyState label="No logs yet. Run ShopLite journeys and import logs, or import mock logs." />;
   }
-  return (
-    <Panel title="Raw API Logs" subtitle="Latest normalized requests stored by the platform.">
-      <Table
-        headers={["Time", "Session", "Method", "Endpoint", "Status", "Latency"]}
-        rows={logs.map((log) => [
-          formatDate(log.occurred_at),
-          log.session_external_id ?? "n/a",
-          log.method ?? "n/a",
-          log.endpoint ?? "n/a",
-          <Badge key={log.id} value={log.status_code ?? "n/a"} />,
-          log.response_time_ms === null ? "n/a" : `${log.response_time_ms} ms`,
-        ])}
-      />
+
+  const table = (
+    <Panel
+      title="Raw API Logs"
+      subtitle={`Latest normalized requests stored by the platform. Showing ${pageRange(pagination)}.`}
+    >
+      <div className="overflow-x-auto">
+        <table className="min-w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase text-slate-500">
+              {["Time", "Session", "Action", "Method", "Endpoint", "Status", "Latency"].map((header) => (
+                <th className="px-3 py-2 font-semibold" key={header}>
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((log) => (
+              <tr
+                className={`cursor-pointer border-b border-slate-100 align-top last:border-0 hover:bg-slate-50 ${
+                  selectedLog?.id === log.id ? "bg-slate-100" : ""
+                }`}
+                key={log.id}
+                onClick={() => setSelectedLog(log)}
+              >
+                <td className="max-w-[180px] px-3 py-2">{formatDate(log.occurred_at)}</td>
+                <td className="max-w-[220px] break-all px-3 py-2 font-mono text-xs">
+                  {log.session_external_id ?? "n/a"}
+                </td>
+                <td className="max-w-[180px] px-3 py-2">
+                  <Badge value={log.action_type || "unknown"} />
+                </td>
+                <td className="max-w-[90px] px-3 py-2 font-mono">{log.method ?? "n/a"}</td>
+                <td className="max-w-[280px] break-all px-3 py-2">{log.endpoint ?? "n/a"}</td>
+                <td className="max-w-[90px] px-3 py-2">
+                  <Badge value={log.status_code ?? "n/a"} />
+                </td>
+                <td className="max-w-[110px] px-3 py-2">
+                  {log.response_time_ms === null ? "n/a" : `${log.response_time_ms} ms`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <PaginationControls pagination={pagination} />
     </Panel>
+  );
+
+  if (!selectedLog) {
+    return table;
+  }
+
+  return (
+    <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+      {table}
+      <Detail title="Log detail">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="break-all font-mono text-xs text-slate-500">{selectedLog.id}</p>
+            <p className="mt-1 break-all text-sm font-semibold text-slate-950">
+              {selectedLog.method ?? "n/a"} {selectedLog.endpoint ?? "n/a"}
+            </p>
+          </div>
+          <button
+            aria-label="Close log detail"
+            className="h-8 w-8 border border-slate-300 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+            onClick={() => setSelectedLog(null)}
+            type="button"
+          >
+            X
+          </button>
+        </div>
+        <KeyValue label="Session" value={selectedLog.session_external_id ?? "n/a"} />
+        <KeyValue label="Trace" value={selectedLog.trace_id ?? "n/a"} />
+        <KeyValue label="User" value={selectedLog.user_id ?? "n/a"} />
+        <KeyValue label="Service" value={selectedLog.service_name} />
+        <KeyValue label="Action" value={selectedLog.action_type || "unknown"} />
+        <KeyValue label="Status" value={String(selectedLog.status_code ?? "n/a")} />
+        <JsonBlock title="Request payload" value={selectedLog.request_payload} />
+        <JsonBlock title="Response body" value={selectedLog.response_body} />
+        <JsonBlock title="Raw log" value={selectedLog.raw_log} />
+      </Detail>
+    </section>
   );
 }
 
 function SessionsPanel({
   detail,
   onSelect,
+  pagination,
   selectedId,
   sessions,
 }: {
   detail: SessionDetail | null;
   onSelect: (id: string) => void;
+  pagination: PaginationProps;
   selectedId: string;
   sessions: SessionItem[];
 }) {
-  if (sessions.length === 0) {
+  if (pagination.total === 0) {
     return <EmptyState label="No sessions yet. Import logs first." />;
   }
   return (
     <SplitPanel
       left={
-        <Table
-          headers={["Session", "User", "Requests", "Source", "Start"]}
-          rows={sessions.map((session) => [
-            <button
-              className={`text-left font-mono text-xs ${selectedId === session.external_session_id ? "font-semibold text-slate-950" : "text-slate-700"}`}
-              key={session.id}
-              onClick={() => onSelect(session.external_session_id)}
-              type="button"
-            >
-              {session.external_session_id}
-            </button>,
-            session.user_id ?? "n/a",
-            session.log_count,
-            session.source,
-            formatDate(session.started_at),
-          ])}
-        />
+        <>
+          <Table
+            headers={["Session", "User", "Requests", "Source", "Start"]}
+            rows={sessions.map((session) => [
+              <button
+                className={`text-left font-mono text-xs ${selectedId === session.external_session_id ? "font-semibold text-slate-950" : "text-slate-700"}`}
+                key={session.id}
+                onClick={() => onSelect(session.external_session_id)}
+                type="button"
+              >
+                {session.external_session_id}
+              </button>,
+              session.user_id ?? "n/a",
+              session.log_count,
+              session.source,
+              formatDate(session.started_at),
+            ])}
+          />
+          <PaginationControls pagination={pagination} />
+        </>
       }
       right={
         <Detail title="Session detail">
@@ -456,36 +619,41 @@ function JourneysPanel({
   journey,
   journeys,
   onSelect,
+  pagination,
   selectedId,
 }: {
   journey: JourneyItem | null;
   journeys: JourneyItem[];
   onSelect: (id: string) => void;
+  pagination: PaginationProps;
   selectedId: string;
 }) {
-  if (journeys.length === 0) {
+  if (pagination.total === 0) {
     return <EmptyState label="No journeys yet. Import logs, then run behavior analysis." />;
   }
   const proofRows = journey ? chainingRows(journey.steps) : [];
   return (
     <SplitPanel
       left={
-        <Table
-          headers={["Journey", "Persona", "Sessions", "Risk"]}
-          rows={journeys.map((item) => [
-            <button
-              className={`text-left ${selectedId === item.id ? "font-semibold text-slate-950" : "text-slate-700"}`}
-              key={item.id}
-              onClick={() => onSelect(item.id)}
-              type="button"
-            >
-              {item.name}
-            </button>,
-            item.persona_name ?? "n/a",
-            item.source_session_count,
-            item.risk_score ?? "n/a",
-          ])}
-        />
+        <>
+          <Table
+            headers={["Journey", "Persona", "Sessions", "Risk"]}
+            rows={journeys.map((item) => [
+              <button
+                className={`text-left ${selectedId === item.id ? "font-semibold text-slate-950" : "text-slate-700"}`}
+                key={item.id}
+                onClick={() => onSelect(item.id)}
+                type="button"
+              >
+                {item.name}
+              </button>,
+              item.persona_name ?? "n/a",
+              item.source_session_count,
+              item.risk_score ?? "n/a",
+            ])}
+          />
+          <PaginationControls pagination={pagination} />
+        </>
       }
       right={
         <Detail title="Journey detail">
@@ -529,37 +697,42 @@ function TestCasesPanel({
   artifact,
   detail,
   onSelect,
+  pagination,
   selectedId,
   testCases,
 }: {
   artifact: ArtifactDetail | null;
   detail: TestCaseDetail | null;
   onSelect: (id: string) => void;
+  pagination: PaginationProps;
   selectedId: string;
   testCases: TestCaseItem[];
 }) {
-  if (testCases.length === 0) {
+  if (pagination.total === 0) {
     return <EmptyState label="No generated tests yet. Select a journey and generate Jest/Supertest." />;
   }
   return (
     <SplitPanel
       left={
-        <Table
-          headers={["Test Case", "Journey", "Steps", "Status"]}
-          rows={testCases.map((testCase) => [
-            <button
-              className={`text-left ${selectedId === testCase.id ? "font-semibold text-slate-950" : "text-slate-700"}`}
-              key={testCase.id}
-              onClick={() => onSelect(testCase.id)}
-              type="button"
-            >
-              {testCase.name}
-            </button>,
-            testCase.journey_name ?? "n/a",
-            testCase.step_count,
-            <Badge key={testCase.id} value={testCase.status} />,
-          ])}
-        />
+        <>
+          <Table
+            headers={["Test Case", "Journey", "Steps", "Status"]}
+            rows={testCases.map((testCase) => [
+              <button
+                className={`text-left ${selectedId === testCase.id ? "font-semibold text-slate-950" : "text-slate-700"}`}
+                key={testCase.id}
+                onClick={() => onSelect(testCase.id)}
+                type="button"
+              >
+                {testCase.name}
+              </button>,
+              testCase.journey_name ?? "n/a",
+              testCase.step_count,
+              <Badge key={testCase.id} value={testCase.status} />,
+            ])}
+          />
+          <PaginationControls pagination={pagination} />
+        </>
       }
       right={
         <Detail title="Generated Jest/Supertest">
@@ -582,37 +755,42 @@ function TestCasesPanel({
 
 function RunsPanel({
   onSelect,
+  pagination,
   runs,
   selectedId,
   selectedRun,
 }: {
   onSelect: (id: string) => void;
+  pagination: PaginationProps;
   runs: TestRun[];
   selectedId: string;
   selectedRun: TestRun | null;
 }) {
-  if (runs.length === 0) {
+  if (pagination.total === 0) {
     return <EmptyState label="No runs yet. Generate a test case, then run it against ShopLite." />;
   }
   return (
     <SplitPanel
       left={
-        <Table
-          headers={["Run", "Status", "Duration", "Started"]}
-          rows={runs.map((run) => [
-            <button
-              className={`text-left font-mono text-xs ${selectedId === run.id ? "font-semibold text-slate-950" : "text-slate-700"}`}
-              key={run.id}
-              onClick={() => onSelect(run.id)}
-              type="button"
-            >
-              {run.id.slice(0, 8)}
-            </button>,
-            <Badge key={run.id} value={run.status} />,
-            run.duration_ms === null ? "n/a" : `${run.duration_ms} ms`,
-            formatDate(run.started_at),
-          ])}
-        />
+        <>
+          <Table
+            headers={["Run", "Status", "Duration", "Started"]}
+            rows={runs.map((run) => [
+              <button
+                className={`text-left font-mono text-xs ${selectedId === run.id ? "font-semibold text-slate-950" : "text-slate-700"}`}
+                key={run.id}
+                onClick={() => onSelect(run.id)}
+                type="button"
+              >
+                {run.id.slice(0, 8)}
+              </button>,
+              <Badge key={run.id} value={run.status} />,
+              run.duration_ms === null ? "n/a" : `${run.duration_ms} ms`,
+              formatDate(run.started_at),
+            ])}
+          />
+          <PaginationControls pagination={pagination} />
+        </>
       }
       right={
         <Detail title="Run result">
@@ -659,6 +837,37 @@ function ReportPanel({ latestRun, selectedRun }: { latestRun: TestRun | null; se
         <JsonBlock title="Regression diff" value={run.diff_result} />
       </div>
     </Panel>
+  );
+}
+
+function PaginationControls({ pagination }: { pagination: PaginationProps }) {
+  const previousOffset = Math.max(0, pagination.offset - pagination.limit);
+  const nextOffset = pagination.offset + pagination.limit;
+  const hasPrevious = pagination.offset > 0;
+  const hasNext = nextOffset < pagination.total;
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm text-slate-600">
+      <span>{pageRange(pagination)}</span>
+      <div className="flex gap-2">
+        <button
+          className="h-8 border border-slate-300 px-3 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+          disabled={!hasPrevious}
+          onClick={() => pagination.onPageChange(previousOffset)}
+          type="button"
+        >
+          Previous
+        </button>
+        <button
+          className="h-8 border border-slate-300 px-3 font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+          disabled={!hasNext}
+          onClick={() => pagination.onPageChange(nextOffset)}
+          type="button"
+        >
+          Next
+        </button>
+      </div>
+    </div>
   );
 }
 

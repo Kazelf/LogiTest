@@ -28,7 +28,7 @@ def run_test_case(test_case_id: str, request: RunTestCaseRequest | None = None) 
 @router.get("/test-cases/{test_case_id}/runs", response_model=TestRunListResponse)
 def list_test_case_runs(
     test_case_id: str,
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, object]:
     try:
