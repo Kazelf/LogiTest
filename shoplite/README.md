@@ -12,18 +12,21 @@ ShopLite is a mini e-commerce System Under Test for the LogiTest AI-Driven Behav
 
 ## 1. Run With Docker
 
+For the full LogiTest + ShopLite demo, use the root compose file so both apps start from one command:
+
 ```bash
-cd shoplite
+cd ..
 docker compose up --build
 ```
 
 URLs:
 
+- LogiTest dashboard: `http://localhost:3000`
 - Frontend: `http://localhost:5173`
 - API: `http://localhost:4000`
 - PostgreSQL: `localhost:5433`
 
-The server container runs Prisma migrations and seeds demo data before starting.
+The combined app container runs Prisma migrations and seeds demo data before starting.
 
 ### Enable Elasticsearch Logging With Docker
 
@@ -35,7 +38,7 @@ ELASTICSEARCH_URL=http://host.docker.internal:9200
 SHOPLITE_LOG_INDEX=logitest-demo-logs
 ```
 
-Then restart ShopLite:
+Then restart the root stack:
 
 ```bash
 docker compose up --build
@@ -56,8 +59,8 @@ npm install
 ## 3. Run Database Only
 
 ```bash
-cd shoplite
-docker compose up -d
+cd ..
+docker compose up -d postgres elasticsearch
 ```
 
 PostgreSQL runs on `localhost:5433`.
@@ -85,6 +88,7 @@ SHOPLITE_LOG_INDEX=logitest-demo-logs
 ```bash
 cd shoplite/server
 npm run prisma:generate
+$env:DATABASE_URL="postgresql://shoplite:shoplite@localhost:5433/shoplite?schema=public"
 npm run prisma:migrate
 ```
 
@@ -92,6 +96,7 @@ npm run prisma:migrate
 
 ```bash
 cd shoplite/server
+$env:DATABASE_URL="postgresql://shoplite:shoplite@localhost:5433/shoplite?schema=public"
 npm run seed
 ```
 
@@ -108,6 +113,7 @@ Demo users all use password `Password123`:
 
 ```bash
 cd shoplite/server
+$env:DATABASE_URL="postgresql://shoplite:shoplite@localhost:5433/shoplite?schema=public"
 npm run dev
 ```
 

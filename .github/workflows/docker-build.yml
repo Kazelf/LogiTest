@@ -17,33 +17,15 @@ concurrency:
 
 jobs:
   docker-build:
-    name: Compose and image builds
+    name: Root compose and app image
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate LogiTest compose config
-        working-directory: logitest-ai
+      - name: Validate root compose config
         run: docker compose config
 
-      - name: Validate ShopLite compose config
-        working-directory: shoplite
-        run: docker compose config
-
-      - name: Build LogiTest FastAPI image
-        working-directory: logitest-ai
-        run: docker build -f apps/api/Dockerfile apps/api
-
-      - name: Build LogiTest dashboard image
-        working-directory: logitest-ai
-        run: docker build -f apps/web/Dockerfile .
-
-      - name: Build ShopLite API image
-        working-directory: shoplite
-        run: docker build -f server/Dockerfile server
-
-      - name: Build ShopLite frontend image
-        working-directory: shoplite
-        run: docker build -f client/Dockerfile client
+      - name: Build combined app image
+        run: docker compose build app

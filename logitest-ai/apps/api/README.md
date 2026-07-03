@@ -157,9 +157,9 @@ Invoke-RestMethod "http://localhost:8000/api/reports/test-runs?limit=5"
 Before the live API smoke test, start the database and apply the migration from the monorepo root:
 
 ```powershell
-cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
-docker compose up -d database
-Get-Content .\database\migrations\001_init_logitest_schema.sql | docker compose exec -T database psql -U logitest -d logitest_ai
+cd D:\ViettelDigitalTalent\LogiTest
+docker compose up -d postgres
+Get-Content .\logitest-ai\database\migrations\001_init_logitest_schema.sql | docker compose exec -T postgres psql -U logitest -d logitest_ai
 ```
 
 

@@ -1,10 +1,14 @@
 .git
-.gitignore
+.github
+.agents
+plans
+docs
 
 **/node_modules
 **/.next
 **/dist
 **/build
+**/coverage
 **/.turbo
 
 **/.venv
@@ -13,8 +17,9 @@
 **/.mypy_cache
 **/*.pyc
 
-.env
-.env.*
-!*.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/logs
 npm-debug.log*
 .DS_Store

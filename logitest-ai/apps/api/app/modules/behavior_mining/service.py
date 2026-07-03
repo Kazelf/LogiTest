@@ -19,6 +19,7 @@ from app.modules.session_reconstruction import (
     ACTION_UNKNOWN,
     ACTION_VIEW_ORDER,
     ACTION_VIEW_PRODUCT,
+    classify_action,
 )
 
 ANALYSIS_METHOD = "rule_based"
@@ -217,19 +218,27 @@ def _build_journey_drafts(session_groups: dict[str, list[dict[str, Any]]]) -> li
 
 
 def _build_steps(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    steps = [
-        {
-            "order": index + 1,
-            "action_type": record.get("action_type") or ACTION_UNKNOWN,
-            "method": record.get("method"),
-            "endpoint": record.get("endpoint"),
-            "expected_status": record.get("status_code"),
-            "response_time_ms": record.get("response_time_ms"),
-            "request_payload": record.get("request_payload") or {},
-            "response_body": record.get("response_body") or {},
-        }
-        for index, record in enumerate(records)
-    ]
+    steps = []
+    previous_action_type = None
+    for record in records:
+        action_type = _resolve_action_type(record)
+        if action_type == ACTION_UNKNOWN or action_type == previous_action_type:
+            continue
+
+        steps.append(
+            {
+                "order": len(steps) + 1,
+                "action_type": action_type,
+                "method": record.get("method"),
+                "endpoint": record.get("endpoint"),
+                "expected_status": record.get("status_code"),
+                "response_time_ms": record.get("response_time_ms"),
+                "request_payload": record.get("request_payload") or {},
+                "response_body": record.get("response_body") or {},
+            }
+        )
+        previous_action_type = action_type
+
     annotated_steps = _annotate_chaining(steps)
     for step in annotated_steps:
         step.pop("request_payload", None)
@@ -274,6 +283,12 @@ def _annotate_chaining(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
             later_step.setdefault("uses", {})[token["field_name"]] = use_location
 
     return steps
+
+def _resolve_action_type(record: dict[str, Any]) -> str:
+    action_type = str(record.get("action_type") or ACTION_UNKNOWN)
+    if action_type != ACTION_UNKNOWN:
+        return action_type
+    return classify_action(record).action_type
 
 def _iter_stable_response_fields(value: Any, path: str = "response.body") -> list[tuple[str, Any, str]]:
     fields: list[tuple[str, Any, str]] = []
@@ -479,6 +494,7 @@ _FETCH_LOG_ROWS_SQL = """
         logs.status_code,
         logs.request_payload,
         logs.response_body,
+        logs.raw_log,
         logs.response_time_ms,
         logs.action_type,
         logs.occurred_at
