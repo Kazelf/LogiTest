@@ -117,6 +117,10 @@ export type BehaviorAnalysis = {
   behaviorName?: string;
   behaviorType?: string;
   userGoal?: string;
+  ai_provider?: string;
+  ai_model?: string | null;
+  fallback_used?: boolean;
+  prompt_version?: string;
   stepSummary?: Array<{
     step?: number;
     api?: string;

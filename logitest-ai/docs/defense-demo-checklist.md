@@ -8,6 +8,16 @@ From the repository root:
 docker compose up --build
 ```
 
+Optional Gemini explanation mode:
+
+```powershell
+$env:GEMINI_API_KEY="your-key"
+$env:AI_PROVIDER="gemini"
+$env:GEMINI_MODEL="gemini-1.5-flash"
+$env:AI_FALLBACK_RULE_BASED="true"
+docker compose up --build
+```
+
 Open:
 
 - LogiTest dashboard: http://localhost:3000
@@ -53,4 +63,4 @@ curl -X POST http://localhost:4000/api/demo/regression-toggle `
 ## Fallbacks
 
 - No Elasticsearch logs: use `Import Mock`, then `Analyze`.
-- No Gemini API key: the app uses deterministic endpoint-pattern explanations, so the demo still works.
+- No Gemini API key: the app uses deterministic endpoint-pattern explanations, so the demo still works and Journey Detail shows `rule_based / fallback`.

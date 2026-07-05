@@ -1,6 +1,7 @@
 const express = require("express");
 const { prisma } = require("../../config/prisma");
 const { env } = require("../../config/env");
+const { demoRegression } = require("../../config/demoRegression");
 const { authMiddleware } = require("../../middlewares/authMiddleware");
 const { createHttpError } = require("../../middlewares/errorHandler");
 
@@ -25,7 +26,7 @@ router.post("/simulate-success", async (req, res, next) => {
       data: { status: "SUCCESS" }
     });
 
-    if (!env.paymentRegressionBug) {
+    if (!env.paymentRegressionBug && !demoRegression.paymentSuccessOrderNotPaid) {
       await prisma.order.update({
         where: { id: order.id },
         data: { status: "PAID" }
@@ -76,7 +77,7 @@ router.post("/webhook", async (req, res, next) => {
         where: { orderId: order.id },
         data: { status: "SUCCESS" }
       });
-      if (!env.paymentRegressionBug) {
+      if (!env.paymentRegressionBug && !demoRegression.paymentSuccessOrderNotPaid) {
         await prisma.order.update({ where: { id: order.id }, data: { status: "PAID" } });
       }
       const updatedOrder = await prisma.order.findUnique({ where: { id: order.id }, include: { payment: true } });

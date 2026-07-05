@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+import json
+from functools import lru_cache
 from typing import Any
 
 from psycopg.rows import dict_row
@@ -9,6 +11,7 @@ from psycopg.types.json import Jsonb
 
 from app.db import connection
 from app.modules.behavior_mining.schemas import JourneyFilters, PersonaFilters
+from app.modules.ai import gemini_client
 from app.modules.session_reconstruction import (
     ACTION_ADD_TO_CART,
     ACTION_LOGIN,
@@ -241,6 +244,8 @@ def _build_steps(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     annotated_steps = _annotate_chaining(steps)
     for step in annotated_steps:
+        step["important_payload_fields"] = _payload_fields(step)
+        step["important_response_fields"] = _response_fields(step)
         step.pop("request_payload", None)
         step.pop("response_body", None)
     return annotated_steps
@@ -478,6 +483,35 @@ def _serialize_journey_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 def _build_behavior_analysis(name: str, steps: list[dict[str, Any]]) -> dict[str, Any]:
+    safe_steps = _safe_analysis_steps(steps)
+    if gemini_client.gemini_available():
+        generated = _cached_gemini_behavior(name, json.dumps(safe_steps, sort_keys=True))
+        if generated:
+            return {**generated, **gemini_client.metadata(fallback_used=False)}
+    fallback = _build_rule_based_behavior_analysis(name, steps)
+    return {**fallback, **gemini_client.metadata(fallback_used=True)}
+
+@lru_cache(maxsize=128)
+def _cached_gemini_behavior(name: str, steps_json: str) -> dict[str, Any] | None:
+    return gemini_client.generate_behavior_explanation(name, json.loads(steps_json))
+
+def _safe_analysis_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "order": step.get("order"),
+            "action_type": step.get("action_type"),
+            "method": step.get("method"),
+            "endpoint": step.get("endpoint"),
+            "expected_status": step.get("expected_status"),
+            "important_payload_fields": step.get("important_payload_fields") or _payload_fields(step),
+            "important_response_fields": step.get("important_response_fields") or _response_fields(step),
+            "extract": step.get("extract") or {},
+            "uses": step.get("uses") or {},
+        }
+        for step in steps
+    ]
+
+def _build_rule_based_behavior_analysis(name: str, steps: list[dict[str, Any]]) -> dict[str, Any]:
     action_types = _action_set(steps)
     behavior_type = "error" if ACTION_PAYMENT_FAILED in action_types else "normal"
     if any(int(step.get("expected_status") or 0) >= 400 for step in steps):
@@ -532,6 +566,9 @@ def _step_meaning(action_type: str, api: str) -> str:
     return meanings.get(action_type, f"User calls {api}.")
 
 def _payload_fields(step: dict[str, Any]) -> list[str]:
+    summarized = step.get("important_payload_fields")
+    if isinstance(summarized, list):
+        return [str(field) for field in summarized]
     payload = step.get("request_payload") or {}
     if isinstance(payload, dict) and payload:
         return sorted(payload.keys())
@@ -543,6 +580,9 @@ def _payload_fields(step: dict[str, Any]) -> list[str]:
     return []
 
 def _response_fields(step: dict[str, Any]) -> list[str]:
+    summarized = step.get("important_response_fields")
+    if isinstance(summarized, list):
+        return [str(field) for field in summarized]
     response = step.get("response_body") or step.get("golden_response") or {}
     if isinstance(response, dict) and response:
         return sorted(response.keys())

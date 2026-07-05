@@ -8,7 +8,7 @@ router.post("/regression-toggle", (req, res, next) => {
   try {
     const { bug, enabled } = req.body || {};
     if (!setDemoRegressionBug(bug, enabled)) {
-      throw createHttpError(400, "UNKNOWN_DEMO_BUG", "Supported demo bug: missing_order_id");
+      throw createHttpError(400, "UNKNOWN_DEMO_BUG", "Supported demo bugs: missing_order_id, payment_success_order_not_paid");
     }
     res.json({ demo_only: true, bug, enabled: Boolean(enabled), state: demoRegression });
   } catch (error) {

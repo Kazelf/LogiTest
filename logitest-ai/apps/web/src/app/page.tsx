@@ -676,6 +676,13 @@ function JourneysPanel({
                 <KeyValue label="Behavior" value={journey.behavior_analysis.behaviorName ?? journey.name} />
                 <KeyValue label="Type" value={journey.behavior_analysis.behaviorType ?? "normal"} />
                 <KeyValue label="Goal" value={journey.behavior_analysis.userGoal ?? journey.description ?? "n/a"} />
+                <KeyValue
+                  label="AI"
+                  value={`${journey.behavior_analysis.ai_provider ?? "rule_based"}${
+                    journey.behavior_analysis.ai_model ? ` / ${journey.behavior_analysis.ai_model}` : ""
+                  }${journey.behavior_analysis.fallback_used ? " / fallback" : ""}`}
+                />
+                <KeyValue label="Prompt" value={journey.behavior_analysis.prompt_version ?? "n/a"} />
                 <ol className="mt-2 space-y-2">
                   {(journey.behavior_analysis.stepSummary ?? []).map((step) => (
                     <li className="border border-slate-200 bg-white p-2" key={`${step.step}-${step.api}`}>
