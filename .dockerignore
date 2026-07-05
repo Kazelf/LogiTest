@@ -20,6 +20,6 @@ docs
 **/.env
 **/.env.*
 !**/.env.example
-**/logs
+shoplite/server/logs
 npm-debug.log*
 .DS_Store

@@ -95,6 +95,16 @@ function chainingRows(steps: JourneyStep[]) {
   });
 }
 
+function reportDiffs(run: TestRun | null) {
+  const diffs = run?.diff_result?.diffs ?? run?.diff_result?.differences;
+  return Array.isArray(diffs) ? diffs : [];
+}
+
+function ignoredFields(run: TestRun | null) {
+  const fields = run?.diff_result?.ignoredFields;
+  return Array.isArray(fields) ? fields.map(String) : [];
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("Logs");
   const [logs, setLogs] = useState<LogItem[]>([]);
@@ -661,6 +671,27 @@ function JourneysPanel({
             <>
               <KeyValue label="Example session" value={journey.example_session_id ?? "n/a"} />
               <KeyValue label="Frequency" value={String(journey.frequency_score ?? "n/a")} />
+              <h3 className="mt-4 text-sm font-semibold">Behavior explanation</h3>
+              <div className="mt-2 border border-slate-200 bg-slate-50 p-3 text-sm">
+                <KeyValue label="Behavior" value={journey.behavior_analysis.behaviorName ?? journey.name} />
+                <KeyValue label="Type" value={journey.behavior_analysis.behaviorType ?? "normal"} />
+                <KeyValue label="Goal" value={journey.behavior_analysis.userGoal ?? journey.description ?? "n/a"} />
+                <ol className="mt-2 space-y-2">
+                  {(journey.behavior_analysis.stepSummary ?? []).map((step) => (
+                    <li className="border border-slate-200 bg-white p-2" key={`${step.step}-${step.api}`}>
+                      <p className="font-mono text-xs">{step.api}</p>
+                      <p className="mt-1">{step.meaning}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Payload: {(step.importantPayload ?? []).join(", ") || "none"} · Response:{" "}
+                        {(step.importantResponse ?? []).join(", ") || "n/a"}
+                      </p>
+                      {step.inputFromPreviousStep ? (
+                        <p className="mt-1 text-xs text-slate-600">Uses: {step.inputFromPreviousStep}</p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              </div>
               <h3 className="mt-4 text-sm font-semibold">Steps</h3>
               <ol className="mt-2 space-y-2">
                 {journey.steps.map((step, index) => (
@@ -813,6 +844,8 @@ function RunsPanel({
 
 function ReportPanel({ latestRun, selectedRun }: { latestRun: TestRun | null; selectedRun: TestRun | null }) {
   const run = selectedRun ?? latestRun;
+  const diffs = reportDiffs(run);
+  const ignored = ignoredFields(run);
   if (!run) {
     return <EmptyState label="No report yet. Run a generated test to persist a regression report." />;
   }
@@ -831,6 +864,30 @@ function ReportPanel({ latestRun, selectedRun }: { latestRun: TestRun | null; se
           <p className="text-xs uppercase text-slate-500">Finished</p>
           <p className="mt-1 text-lg font-semibold">{formatDate(run.finished_at)}</p>
         </div>
+      </div>
+      <div className="mt-4 border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold">Deterministic diffs</div>
+        {diffs.length ? (
+          <Table
+            headers={["Type", "Path", "Expected", "Actual", "Severity"]}
+            rows={diffs.map((diff, index) => {
+              const item = diff as Record<string, unknown>;
+              return [
+                String(item.type ?? "diff"),
+                <span className="font-mono text-xs" key={`path-${index}`}>{String(item.path ?? "n/a")}</span>,
+                <span className="font-mono text-xs" key={`expected-${index}`}>{formatJson(item.expected)}</span>,
+                <span className="font-mono text-xs" key={`actual-${index}`}>{formatJson(item.actual)}</span>,
+                <Badge key={`severity-${index}`} value={String(item.severity ?? "medium")} />,
+              ];
+            })}
+          />
+        ) : (
+          <p className="p-3 text-sm text-slate-500">No diffs for this run.</p>
+        )}
+      </div>
+      <div className="mt-4 border border-slate-200 bg-slate-50 p-3 text-sm">
+        <p className="font-semibold">Ignored dynamic fields</p>
+        <p className="mt-1 font-mono text-xs text-slate-700">{ignored.length ? ignored.join(", ") : "none"}</p>
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <JsonBlock title="Actual response" value={run.actual_response} />

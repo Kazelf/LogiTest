@@ -49,6 +49,7 @@ class JourneyListItem(BaseModel):
     frequency_score: float | None
     risk_score: float | None
     steps: list[dict[str, Any]]
+    behavior_analysis: dict[str, Any] = Field(default_factory=dict)
     example_session_id: str | None
     created_at: datetime
     updated_at: datetime

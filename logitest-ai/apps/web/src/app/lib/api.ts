@@ -107,9 +107,26 @@ export type JourneyItem = {
   frequency_score: number | null;
   risk_score: number | null;
   steps: JourneyStep[];
+  behavior_analysis: BehaviorAnalysis;
   example_session_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type BehaviorAnalysis = {
+  behaviorName?: string;
+  behaviorType?: string;
+  userGoal?: string;
+  stepSummary?: Array<{
+    step?: number;
+    api?: string;
+    meaning?: string;
+    importantPayload?: string[];
+    importantResponse?: string[];
+    inputFromPreviousStep?: string;
+  }>;
+  chaining?: Array<Record<string, unknown>>;
+  riskNotes?: string[];
 };
 
 export type JourneyStep = {

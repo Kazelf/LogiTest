@@ -27,8 +27,9 @@ log() {
 wait_for_postgres() {
   local url="$1"
   local name="$2"
+  local readiness_url="${url%%\?*}"
   log "Waiting for PostgreSQL database: $name"
-  until pg_isready -d "$url" >/dev/null 2>&1; do
+  until pg_isready -d "$readiness_url" >/dev/null 2>&1; do
     sleep 2
   done
 }
