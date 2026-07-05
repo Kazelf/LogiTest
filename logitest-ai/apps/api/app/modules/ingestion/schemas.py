@@ -15,7 +15,9 @@ class ImportElasticsearchLogsRequest(BaseModel):
     index: str | None = None
     start_time: datetime | None = None
     end_time: datetime | None = None
-    limit: int = Field(default=200, ge=1, le=1000)
+    limit: int | None = Field(default=None, ge=1, le=10000)
+    page_size: int = Field(default=500, ge=1, le=1000)
+    new_only: bool = False
 
 class ImportElasticsearchLogsResponse(BaseModel):
     source: str
@@ -24,6 +26,9 @@ class ImportElasticsearchLogsResponse(BaseModel):
     imported_logs: int
     sessions: int
     counts: dict[str, int]
+    limit: int | None = None
+    page_size: int = 500
+    new_only: bool = False
 
 class ImportShopLiteLogsResponse(BaseModel):
     source: str
@@ -44,13 +49,17 @@ class LogListItem(BaseModel):
     method: str | None
     endpoint: str | None
     status_code: int | None
+    action_type: str
+    request_payload: dict[str, Any]
+    response_body: dict[str, Any]
+    raw_log: dict[str, Any]
     response_time_ms: int | None
     occurred_at: datetime
 
 
 class LogListResponse(BaseModel):
     items: list[LogListItem]
-    limit: int = Field(ge=1, le=200)
+    limit: int = Field(ge=1, le=500)
     offset: int = Field(ge=0)
     total: int
 
@@ -82,7 +91,7 @@ class SessionSummaryItem(BaseModel):
 
 class SessionListResponse(BaseModel):
     items: list[SessionSummaryItem]
-    limit: int = Field(ge=1, le=200)
+    limit: int = Field(ge=1, le=500)
     offset: int = Field(ge=0)
     total: int
 

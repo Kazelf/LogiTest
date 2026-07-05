@@ -17,21 +17,43 @@ def search_logs(
     index: str,
     start_time: datetime | None = None,
     end_time: datetime | None = None,
-    limit: int = 200,
+    limit: int | None = None,
+    page_size: int = 500,
+    start_exclusive: bool = False,
 ) -> list[dict[str, Any]]:
-    query = _build_search_query(start_time=start_time, end_time=end_time, limit=limit)
     url = f"{settings.elasticsearch_url.rstrip('/')}/{index}/_search"
+    hits: list[dict[str, Any]] = []
+    offset = 0
 
-    try:
-        response = httpx.post(url, json=query, timeout=10.0)
-        response.raise_for_status()
-    except httpx.HTTPError as exc:
-        raise ElasticsearchImportError("Elasticsearch search failed.") from exc
+    while True:
+        remaining = None if limit is None else limit - len(hits)
+        if remaining is not None and remaining <= 0:
+            break
 
-    payload = response.json()
-    hits = payload.get("hits", {}).get("hits", [])
-    if not isinstance(hits, list):
-        raise ElasticsearchImportError("Elasticsearch response has invalid hits shape.")
+        size = page_size if remaining is None else min(page_size, remaining)
+        query = _build_search_query(
+            start_time=start_time,
+            end_time=end_time,
+            limit=size,
+            offset=offset,
+            start_exclusive=start_exclusive,
+        )
+
+        try:
+            response = httpx.post(url, json=query, timeout=10.0)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ElasticsearchImportError("Elasticsearch search failed.") from exc
+
+        payload = response.json()
+        page_hits = payload.get("hits", {}).get("hits", [])
+        if not isinstance(page_hits, list):
+            raise ElasticsearchImportError("Elasticsearch response has invalid hits shape.")
+
+        hits.extend(page_hits)
+        if len(page_hits) < size:
+            break
+        offset += len(page_hits)
 
     return hits
 
@@ -41,12 +63,14 @@ def _build_search_query(
     start_time: datetime | None,
     end_time: datetime | None,
     limit: int,
+    offset: int = 0,
+    start_exclusive: bool = False,
 ) -> dict[str, Any]:
     filters: list[dict[str, Any]] = []
     range_filter: dict[str, str] = {}
 
     if start_time is not None:
-        range_filter["gte"] = start_time.isoformat()
+        range_filter["gt" if start_exclusive else "gte"] = start_time.isoformat()
     if end_time is not None:
         range_filter["lte"] = end_time.isoformat()
     if range_filter:
@@ -58,6 +82,7 @@ def _build_search_query(
 
     return {
         "query": query,
+        "from": offset,
         "size": limit,
         "sort": [{"timestamp": {"order": "asc"}}],
     }

@@ -63,35 +63,55 @@ The intended defense demo flow is:
 10. Enable ShopLite's regression bug toggle.
 11. Run tests again and show the regression report.
 
-### Defense Demo Script
+## Quick Start
 
-Start the LogiTest stack, generate behavior in ShopLite, then drive the platform from the dashboard:
+Use this path for the normal demo. From the repository root, start the combined stack:
 
 ```powershell
-cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
+cd D:\ViettelDigitalTalent\LogiTest
 docker compose up --build
 ```
 
-In another terminal:
+This builds one combined app container for LogiTest AI and ShopLite. PostgreSQL and Elasticsearch still run as dependency services.
 
-```powershell
-cd D:\ViettelDigitalTalent\LogiTest\shoplite
-docker compose up -d
+Open the apps:
 
-cd D:\ViettelDigitalTalent\LogiTest\shoplite\server
-npm run dev
+- LogiTest dashboard: `http://localhost:3000`
+- ShopLite frontend: `http://localhost:5173`
+- ShopLite API: `http://localhost:4000`
+- FastAPI health check: `http://localhost:8000/health`
 
-cd D:\ViettelDigitalTalent\LogiTest\shoplite\client
-npm run dev
-```
-
-Open `http://localhost:3000`, then use:
+Generate fresh ShopLite traffic from `http://localhost:5173`, then return to the LogiTest dashboard and run:
 
 ```text
 Import ShopLite -> Analyze -> select journey -> Generate Jest -> select test case -> Run Test -> Report
 ```
 
-If ShopLite logs are not available yet, use `Import Mock` in the dashboard as the fallback demo path.
+If the ShopLite import has no records, use `Import Mock` as the fallback path.
+
+## Reset Analyzed Journeys
+
+After changing journey classification rules, old rows in `journeys` can remain because journeys are upserted by `name`. If the dashboard still shows long journey names such as `unknown > unknown > ...`, clear the analyzed journey data once, then run `Analyze` again.
+
+### Clear only journeys
+
+Use this when you only want to remove old analyzed journeys. Existing test cases are kept, but their `journey_id` becomes `NULL`.
+
+```powershell
+cd D:\ViettelDigitalTalent\LogiTest
+docker compose exec postgres psql -U logitest -d logitest_ai -c "DELETE FROM journeys;"
+```
+
+### Clear journeys and generated test cases
+
+Use this before a clean demo when old generated tests were created from noisy journeys.
+
+```powershell
+cd D:\ViettelDigitalTalent\LogiTest
+docker compose exec postgres psql -U logitest -d logitest_ai -c "DELETE FROM test_case_artifacts; DELETE FROM test_cases; DELETE FROM journeys;"
+```
+
+Then run `Analyze` again in the dashboard. You do not need to delete logs or sessions unless you want a full data reset.
 
 ## Current Repository State
 
@@ -103,7 +123,7 @@ Implemented foundation:
 - `packages/shared`: shared TypeScript/Zod schema package.
 - `database/migrations/001_init_logitest_schema.sql`: PostgreSQL schema for sessions, logs, journeys, test cases, artifacts, and runs.
 - `mock-data/logs.json`: fallback e-commerce-like sample logs.
-- `docker-compose.yml`: current LogiTest stack with `web`, `api`, `database`, and `elasticsearch`.
+- Root `../docker-compose.yml`: combined local stack with LogiTest AI, ShopLite, PostgreSQL, and Elasticsearch.
 
 Completed MVP path:
 
@@ -114,7 +134,11 @@ Completed MVP path:
 
 ## Local Development
 
-Install workspace dependencies from the monorepo root:
+The Docker quick start above is the recommended route for demos. Use this manual mode when you need to debug a single service.
+
+### Install JavaScript dependencies
+
+Install LogiTest workspace dependencies:
 
 ```powershell
 cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
@@ -128,6 +152,65 @@ cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
 npm run build --workspace @logitest/shared
 ```
 
+Install ShopLite dependencies:
+
+```powershell
+cd D:\ViettelDigitalTalent\LogiTest\shoplite\server
+npm install
+
+cd D:\ViettelDigitalTalent\LogiTest\shoplite\client
+npm install
+```
+
+### Start infrastructure
+
+Start the root Docker stack for PostgreSQL and Elasticsearch:
+
+```powershell
+cd D:\ViettelDigitalTalent\LogiTest
+docker compose up -d postgres elasticsearch
+```
+
+### Run ShopLite manually
+
+Prepare the ShopLite database:
+
+```powershell
+cd D:\ViettelDigitalTalent\LogiTest\shoplite\server
+$env:DATABASE_URL="postgresql://shoplite:shoplite@localhost:5433/shoplite?schema=public"
+npm.cmd run prisma:generate
+npm.cmd run prisma:migrate
+npm.cmd run seed
+```
+
+Run the ShopLite backend and frontend:
+
+```powershell
+cd D:\ViettelDigitalTalent\LogiTest\shoplite\server
+$env:DATABASE_URL="postgresql://shoplite:shoplite@localhost:5433/shoplite?schema=public"
+$env:ENABLE_ELASTICSEARCH_LOGGING="true"
+$env:ELASTICSEARCH_URL="http://localhost:9200"
+npm.cmd run dev
+
+cd D:\ViettelDigitalTalent\LogiTest\shoplite\client
+npm.cmd run dev
+```
+
+### Run LogiTest manually
+
+Run the FastAPI backend:
+
+```powershell
+cd D:\ViettelDigitalTalent\LogiTest\logitest-ai\apps\api
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements.txt
+$env:DATABASE_URL="postgresql://logitest:logitest@localhost:5432/logitest_ai"
+$env:ELASTICSEARCH_URL="http://localhost:9200"
+$env:SHOPLITE_LOG_PATH="D:\ViettelDigitalTalent\LogiTest\shoplite\server\logs\request-logs.jsonl"
+$env:STAGING_API_BASE_URL="http://localhost:4000"
+.\.venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
+```
+
 Run the frontend dashboard:
 
 ```powershell
@@ -135,54 +218,54 @@ cd D:\ViettelDigitalTalent\LogiTest\logitest-ai\apps\web
 npm.cmd run dev
 ```
 
-Run ShopLite backend and frontend:
+### Docker services
+
+Run the combined Docker stack from the repository root:
 
 ```powershell
-cd D:\ViettelDigitalTalent\LogiTest\shoplite
-docker compose up -d
-
-cd D:\ViettelDigitalTalent\LogiTest\shoplite\server
-npm.cmd run dev
-
-cd D:\ViettelDigitalTalent\LogiTest\shoplite\client
-npm.cmd run dev
+cd D:\ViettelDigitalTalent\LogiTest
+docker compose up --build
 ```
 
-Run the FastAPI backend:
+Current Docker services expose:
+
+- LogiTest web: `http://localhost:3000`
+- LogiTest API health: `http://localhost:8000/health`
+- LogiTest PostgreSQL: `localhost:5432`, database `logitest_ai`, user `logitest`, password `logitest`
+- Elasticsearch: `http://localhost:9200`
+- ShopLite frontend: `http://localhost:5173`
+- ShopLite API: `http://localhost:4000`
+- ShopLite PostgreSQL: `localhost:5433`, database `shoplite`, user `shoplite`, password `shoplite`
+
+Stop the Docker development stack:
 
 ```powershell
-cd D:\ViettelDigitalTalent\LogiTest\logitest-ai\apps\api
-.\.venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
+cd D:\ViettelDigitalTalent\LogiTest
+docker compose down
 ```
+
+### Tests
 
 Run backend tests:
 
 ```powershell
 cd D:\ViettelDigitalTalent\LogiTest\logitest-ai\apps\api
+$env:PYTHONPATH="D:\ViettelDigitalTalent\LogiTest\logitest-ai\apps\api"
 .\.venv\Scripts\python -m pytest
 ```
 
-Run the current Docker development stack:
+Run ShopLite tests:
 
 ```powershell
-cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
-docker compose up --build
+cd D:\ViettelDigitalTalent\LogiTest\shoplite\server
+npm.cmd test
 ```
 
-Current Docker stack exposes:
-
-- Web: `http://localhost:3000`
-- API health: `http://localhost:8000/health`
-- PostgreSQL: `localhost:5432`, database `logitest_ai`, user `logitest`, password `logitest`
-- ShopLite API: `http://localhost:4000`
-- ShopLite frontend: `http://localhost:5173`
-- Elasticsearch: `http://localhost:9200`
-
-Stop the Docker development stack:
+Run the payment regression demo test:
 
 ```powershell
-cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
-docker compose down
+cd D:\ViettelDigitalTalent\LogiTest\shoplite\server
+npm.cmd run test:regression
 ```
 
 ## Environment Variables
@@ -195,11 +278,3 @@ Key local variables:
 - `SHOPLITE_LOG_PATH`: JSONL file path for the ShopLite log bridge.
 - `STAGING_API_BASE_URL`: target URL for generated test execution, usually ShopLite at `http://localhost:4000`.
 - `DEMO_LOG_INDEX`: Elasticsearch index for imported demo logs.
-
-## Implementation Plan
-
-Current mentor-aligned roadmap:
-
-```text
-D:\ViettelDigitalTalent\LogiTest\plans\20260624-logitest-mentor-aligned-mvp-roadmap\plan.md
-```

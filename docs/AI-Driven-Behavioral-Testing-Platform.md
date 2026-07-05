@@ -162,17 +162,17 @@ logitest-ai/
   mock-data/          JSON fallback logs
   database/           PostgreSQL migrations
   generated-tests/    Generated Jest/Supertest artifacts
-  docker-compose.yml  Local demo stack
 ../shoplite/          Express + React e-commerce system under test
+docker-compose.yml    Root local demo stack
 ```
 
 Docker Compose mục tiêu:
 
 ```text
 services:
-  database
+  app
+  postgres
   elasticsearch
-  shoplite (run separately)
   api
   web
 ```

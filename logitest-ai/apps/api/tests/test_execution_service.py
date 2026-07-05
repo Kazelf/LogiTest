@@ -50,6 +50,7 @@ def test_run_test_case_replays_steps_extracts_variables_and_persists_pass(monkey
     assert "INSERT INTO test_runs" in insert_sql
     assert insert_params[1] == "passed"
     assert insert_params[6].obj["steps"][1]["resolved_endpoint"] == "/api/orders/order-new"
+    assert "$.data.orderId" in insert_params[7].obj["ignoredFields"]
 
 
 def test_compare_results_reports_regression_business_field_diff() -> None:
@@ -73,9 +74,17 @@ def test_compare_results_reports_regression_business_field_diff() -> None:
     )
 
     assert diff["differences"] == [
-        {"order": 1, "type": "business_field", "expected": {"path": "body.data.status", "value": "created"}, "actual": "pending"}
+        {
+            "order": 1,
+            "type": "business_field",
+            "path": "$.data.status",
+            "expected": "created",
+            "actual": "pending",
+            "severity": "medium",
+            "message": "Business field mismatch.",
+        }
     ]
-    assert diff["summary"]["failed"] == 1
+    assert diff["counts"]["failed"] == 1
 
 
 def test_replace_request_body_uses_matches_camel_and_snake_keys() -> None:

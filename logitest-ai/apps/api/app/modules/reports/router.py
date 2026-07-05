@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 @router.get("/test-runs", response_model=TestRunListResponse)
 def list_test_run_reports(
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     run_status: str | None = Query(default=None, alias="status"),
 ) -> dict[str, object]:

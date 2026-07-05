@@ -5,14 +5,14 @@ This folder contains the MVP PostgreSQL schema for LogiTest AI.
 ## Start PostgreSQL
 
 ```powershell
-cd D:\ViettelDigitalTalent\LogiTest\logitest-ai
-docker compose up -d database
+cd D:\ViettelDigitalTalent\LogiTest
+docker compose up -d postgres
 ```
 
 ## Apply Schema
 
 ```powershell
-Get-Content .\database\migrations\001_init_logitest_schema.sql | docker compose exec -T database psql -U logitest -d logitest_ai
+Get-Content .\logitest-ai\database\migrations\001_init_logitest_schema.sql | docker compose exec -T postgres psql -U logitest -d logitest_ai
 ```
 
 If your local database was created before `logs.action_type` existed, reset the local MVP database or apply the equivalent manual update:
@@ -27,16 +27,16 @@ If your local database was created before generated script artifacts existed, re
 ## Inspect Tables
 
 ```powershell
-docker compose exec database psql -U logitest -d logitest_ai -c "\dt"
+docker compose exec postgres psql -U logitest -d logitest_ai -c "\dt"
 ```
 
 ## Verify Seeded Data
 
 ```powershell
-docker compose exec database psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM logs;"
-docker compose exec database psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM sessions;"
-docker compose exec database psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM personas;"
-docker compose exec database psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM journeys;"
-docker compose exec database psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM test_cases;"
-docker compose exec database psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM test_case_artifacts;"
+docker compose exec postgres psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM logs;"
+docker compose exec postgres psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM sessions;"
+docker compose exec postgres psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM personas;"
+docker compose exec postgres psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM journeys;"
+docker compose exec postgres psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM test_cases;"
+docker compose exec postgres psql -U logitest -d logitest_ai -c "SELECT COUNT(*) FROM test_case_artifacts;"
 ```

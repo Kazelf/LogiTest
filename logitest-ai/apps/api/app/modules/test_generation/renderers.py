@@ -7,6 +7,7 @@ from typing import Any
 from app.modules.test_generation.schemas import GeneratedTestFramework
 
 DYNAMIC_RESPONSE_KEYS = {
+    "accessToken",
     "cartId",
     "cart_id",
     "createdAt",
@@ -18,6 +19,9 @@ DYNAMIC_RESPONSE_KEYS = {
     "product_id",
     "requestId",
     "request_id",
+    "refreshToken",
+    "sessionId",
+    "session_id",
     "timestamp",
     "token",
     "traceId",

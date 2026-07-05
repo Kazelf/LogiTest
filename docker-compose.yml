@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: logitest-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-multiple-databases.sql:/docker-entrypoint-initdb.d/001-init-multiple-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: logitest-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: logitest-shoplite-app
+    restart: unless-stopped
+    environment:
+      LOGITEST_DATABASE_URL: postgresql://logitest:logitest@postgres:5432/logitest_ai
+      SHOPLITE_DATABASE_URL: postgresql://shoplite:shoplite@postgres:5432/shoplite?schema=public
+      POSTGRES_ADMIN_URL: postgresql://postgres:postgres@postgres:5432/postgres
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      DEMO_LOG_INDEX: logitest-demo-logs
+      SHOPLITE_LOG_INDEX: logitest-demo-logs
+      SHOPLITE_LOG_PATH: /workspace/shoplite/server/logs/request-logs.jsonl
+      STAGING_API_BASE_URL: http://localhost:4000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+      VITE_API_BASE_URL: http://localhost:4000
+      CLIENT_ORIGIN: http://localhost:5173
+      JWT_SECRET: shoplite-dev-secret
+      ENVIRONMENT: production-demo
+      ENABLE_PAYMENT_REGRESSION_BUG: "false"
+      ENABLE_ELASTICSEARCH_LOGGING: "true"
+    ports:
+      - "3000:3000"
+      - "4000:4000"
+      - "5173:5173"
+      - "8000:8000"
+    volumes:
+      - ./shoplite/server/logs:/workspace/shoplite/server/logs
+      - ./logitest-ai/generated-tests:/workspace/logitest-ai/generated-tests
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  elasticsearch_data:

@@ -11,6 +11,7 @@ from psycopg.types.json import Jsonb
 
 from app.core.settings import settings
 from app.db import connection
+from app.modules.execution.comparator import compare_steps
 
 RUNNER_NAME = "logitest-json-step-runner"
 DYNAMIC_RESPONSE_KEYS = {
@@ -75,10 +76,10 @@ def run_test_case(
             try:
                 actual_response = _execute_steps(steps, base_url=base_url, timeout_seconds=timeout_seconds)
                 diff_result = _compare_results(steps, list(test_case.get("assertions") or []), actual_response["steps"])
-                status = "passed" if not diff_result["differences"] else "failed"
+                status = "passed" if diff_result["status"] == "passed" else "failed"
             except Exception as exc:
                 actual_response = {"steps": []}
-                diff_result = {"differences": [], "summary": {"passed": 0, "failed": 0, "errored": 1}}
+                diff_result = {"status": "failed", "differences": [], "diffs": [], "summary": "error", "counts": {"passed": 0, "failed": 0, "errored": 1}}
                 status = "error"
                 error_message = str(exc)
 
@@ -219,6 +220,7 @@ def _fetch_test_case(cur: Any, test_case_id: str) -> dict[str, Any] | None:
 
 def _execute_steps(steps: list[dict[str, Any]], *, base_url: str, timeout_seconds: float) -> dict[str, Any]:
     variables: dict[str, Any] = {}
+    auth_token: str | None = None
     results: list[dict[str, Any]] = []
     with httpx.Client(timeout=timeout_seconds) as client:
         for step in steps:
@@ -226,10 +228,20 @@ def _execute_steps(steps: list[dict[str, Any]], *, base_url: str, timeout_second
             endpoint = str(step.get("endpoint") or "/")
             request_payload = _replace_request_body_uses(step.get("request_payload") or {}, step.get("uses") or {}, variables)
             resolved_endpoint = _replace_path_uses(endpoint, step.get("uses") or {}, variables)
+            request_payload, headers = _prepare_request(method, resolved_endpoint, request_payload, auth_token)
             step_start = perf_counter()
-            response = client.request(method, _build_url(base_url, resolved_endpoint), json=request_payload if method != "GET" else None)
+            request_kwargs: dict[str, Any] = {"json": request_payload if method != "GET" else None}
+            if headers:
+                request_kwargs["headers"] = headers
+            response = client.request(
+                method,
+                _build_url(base_url, resolved_endpoint),
+                **request_kwargs,
+            )
             duration_ms = int((perf_counter() - step_start) * 1000)
             response_body = _response_body(response)
+            auth_token = _extract_auth_token(response_body) or auth_token
+            extracted, missing_extracts = _capture_extracts(step.get("extract") or {}, response_body, variables)
             result = {
                 "order": int(step.get("order") or len(results) + 1),
                 "method": method,
@@ -238,9 +250,10 @@ def _execute_steps(steps: list[dict[str, Any]], *, base_url: str, timeout_second
                 "status_code": response.status_code,
                 "duration_ms": duration_ms,
                 "response_body": response_body,
+                "extracted": extracted,
+                "missing_extracts": missing_extracts,
             }
             results.append(result)
-            _capture_extracts(step.get("extract") or {}, response_body, variables)
 
     return {"steps": results, "variable_count": len(variables)}
 
@@ -250,69 +263,7 @@ def _compare_results(
     assertions: list[dict[str, Any]],
     actual_steps: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    differences: list[dict[str, Any]] = []
-    actual_by_order = {int(step["order"]): step for step in actual_steps}
-    steps_by_order = {int(step.get("order") or index + 1): step for index, step in enumerate(steps)}
-
-    for order, expected_step in steps_by_order.items():
-        actual_step = actual_by_order.get(order)
-        if actual_step is None:
-            differences.append({"order": order, "type": "missing_step", "expected": expected_step.get("endpoint"), "actual": None})
-            continue
-        expected_status = expected_step.get("expected_status")
-        if expected_status is not None and actual_step.get("status_code") != expected_status:
-            differences.append(
-                {"order": order, "type": "status_code", "expected": expected_status, "actual": actual_step.get("status_code")}
-            )
-
-        golden_response = expected_step.get("golden_response")
-        if isinstance(golden_response, dict):
-            actual_body = actual_step.get("response_body")
-            differences.extend(_compare_schema(order, golden_response, actual_body))
-            differences.extend(_compare_stable_fields(order, golden_response, actual_body))
-
-    for assertion in assertions:
-        if assertion.get("type") != "response_time_ms":
-            continue
-        order = int(assertion.get("order") or 0)
-        max_ms = ((assertion.get("expected") or {}).get("max_ms")) if isinstance(assertion.get("expected"), dict) else None
-        actual_step = actual_by_order.get(order)
-        if isinstance(max_ms, int) and actual_step and isinstance(actual_step.get("duration_ms"), int) and actual_step["duration_ms"] > max_ms:
-            differences.append({"order": order, "type": "response_time_ms", "expected": {"max_ms": max_ms}, "actual": actual_step["duration_ms"]})
-
-    passed = len(actual_steps) - len({diff["order"] for diff in differences})
-    return {"differences": differences, "summary": {"passed": max(passed, 0), "failed": len(differences), "errored": 0}}
-
-
-def _compare_schema(order: int, golden: dict[str, Any], actual: Any) -> list[dict[str, Any]]:
-    if not isinstance(actual, dict):
-        return [{"order": order, "type": "response_schema", "expected": sorted(golden.keys()), "actual": type(actual).__name__}]
-    missing = sorted(key for key in golden.keys() if key not in actual)
-    if not missing:
-        return []
-    return [{"order": order, "type": "response_schema", "expected": sorted(golden.keys()), "actual": {"missing": missing}}]
-
-
-def _compare_stable_fields(order: int, golden: Any, actual: Any, path: str = "body") -> list[dict[str, Any]]:
-    differences: list[dict[str, Any]] = []
-    if isinstance(golden, dict):
-        for key, expected_value in golden.items():
-            if key in DYNAMIC_RESPONSE_KEYS:
-                continue
-            actual_value = actual.get(key) if isinstance(actual, dict) else None
-            differences.extend(_compare_stable_fields(order, expected_value, actual_value, f"{path}.{key}"))
-    elif isinstance(golden, list):
-        if not isinstance(actual, list):
-            differences.append({"order": order, "type": "business_field", "expected": {"path": path, "value": golden}, "actual": actual})
-        else:
-            for index, expected_item in enumerate(golden):
-                actual_item = actual[index] if index < len(actual) else None
-                differences.extend(_compare_stable_fields(order, expected_item, actual_item, f"{path}[{index}]"))
-    elif isinstance(golden, (str, int, float, bool)) or golden is None:
-        if actual != golden:
-            differences.append({"order": order, "type": "business_field", "expected": {"path": path, "value": golden}, "actual": actual})
-    return differences
-
+    return compare_steps(steps, assertions, actual_steps)
 
 def _insert_test_run(
     cur: Any,
@@ -373,12 +324,37 @@ def _insert_test_run(
     return _serialize_test_run_row(cur.fetchone())
 
 
-def _capture_extracts(extracts: dict[str, str], response_body: Any, variables: dict[str, Any]) -> None:
+def _capture_extracts(extracts: dict[str, str], response_body: Any, variables: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    captured: dict[str, Any] = {}
+    missing: list[dict[str, str]] = []
     for name, path in extracts.items():
         value = _value_at_path({"response": {"body": response_body}, "body": response_body}, str(path))
         if value is not None:
             variables[str(name)] = value
+            captured[str(name)] = value
+        else:
+            missing.append({"name": str(name), "path": str(path)})
+    return captured, missing
 
+
+def _prepare_request(method: str, endpoint: str, payload: Any, auth_token: str | None) -> tuple[Any, dict[str, str]]:
+    headers: dict[str, str] = {}
+    if not isinstance(payload, dict):
+        return payload, headers
+
+    body = dict(payload)
+    authorization = body.pop("authorization", None)
+    if auth_token and (authorization or not endpoint.endswith("/auth/login")):
+        headers["Authorization"] = f"Bearer {auth_token}"
+    if method == "POST" and endpoint.endswith("/auth/login") and body.get("password") == "***MASKED***":
+        body["password"] = "Password123"
+    return body, headers
+
+def _extract_auth_token(response_body: Any) -> str | None:
+    if not isinstance(response_body, dict):
+        return None
+    token = response_body.get("accessToken") or response_body.get("token")
+    return str(token) if token else None
 
 def _replace_path_uses(endpoint: str, uses: dict[str, str], variables: dict[str, Any]) -> str:
     resolved = endpoint

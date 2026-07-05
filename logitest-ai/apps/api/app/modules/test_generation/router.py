@@ -49,7 +49,7 @@ def generate_test_case(request: GenerateTestCaseRequest) -> dict[str, object]:
 
 @router.get("/test-cases", response_model=TestCaseListResponse)
 def list_test_cases(
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     journey_id: str | None = None,
     test_case_status: str | None = Query(default=None, alias="status"),

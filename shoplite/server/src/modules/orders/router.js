@@ -2,13 +2,14 @@ const express = require("express");
 const { prisma } = require("../../config/prisma");
 const { authMiddleware } = require("../../middlewares/authMiddleware");
 const { createHttpError } = require("../../middlewares/errorHandler");
+const { demoRegression } = require("../../config/demoRegression");
 const { calculateCart, getOrCreateActiveCart } = require("../cart/service");
 
 const router = express.Router();
 router.use(authMiddleware);
 
 function serializeOrder(order) {
-  return {
+  const response = {
     order_id: order.id,
     order_status: order.status,
     payment_status: order.payment?.status || null,
@@ -27,6 +28,8 @@ function serializeOrder(order) {
     })),
     created_at: order.createdAt
   };
+  if (demoRegression.missingOrderId) delete response.order_id;
+  return response;
 }
 
 const orderInclude = {

@@ -29,7 +29,7 @@ class PersonaListItem(BaseModel):
 
 class PersonaListResponse(BaseModel):
     items: list[PersonaListItem]
-    limit: int = Field(ge=1, le=200)
+    limit: int = Field(ge=1, le=500)
     offset: int = Field(ge=0)
     total: int
 
@@ -49,6 +49,7 @@ class JourneyListItem(BaseModel):
     frequency_score: float | None
     risk_score: float | None
     steps: list[dict[str, Any]]
+    behavior_analysis: dict[str, Any] = Field(default_factory=dict)
     example_session_id: str | None
     created_at: datetime
     updated_at: datetime
@@ -56,6 +57,6 @@ class JourneyListItem(BaseModel):
 
 class JourneyListResponse(BaseModel):
     items: list[JourneyListItem]
-    limit: int = Field(ge=1, le=200)
+    limit: int = Field(ge=1, le=500)
     offset: int = Field(ge=0)
     total: int

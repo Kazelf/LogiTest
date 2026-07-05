@@ -31,7 +31,7 @@ def analyze_behavior() -> dict[str, object]:
 
 @router.get("/journeys", response_model=JourneyListResponse)
 def list_journeys(
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     persona_id: str | None = None,
     name: str | None = None,
@@ -48,7 +48,7 @@ def list_journeys(
 
 @router.get("/personas", response_model=PersonaListResponse)
 def list_personas(
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     name: str | None = None,
 ) -> dict[str, object]:

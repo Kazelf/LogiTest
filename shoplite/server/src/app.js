@@ -15,6 +15,7 @@ const checkoutRouter = require("./modules/checkout/router");
 const ordersRouter = require("./modules/orders/router");
 const paymentsRouter = require("./modules/payments/router");
 const adminRouter = require("./modules/admin/router");
+const demoRouter = require("./modules/demo/router");
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use("/api/checkout", checkoutRouter);
 app.use("/api/orders", ordersRouter);
 app.use("/api/payments", paymentsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/demo", demoRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

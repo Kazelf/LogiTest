@@ -82,10 +82,42 @@ def test_classify_action_supports_api_prefixed_ecommerce_paths() -> None:
     examples = [
         ({"method": "POST", "endpoint": "/api/auth/login", "response_status": 200}, ACTION_LOGIN),
         ({"method": "GET", "endpoint": "/api/products?query=headphones", "response_status": 200}, ACTION_SEARCH_PRODUCT),
+        ({"method": "GET", "endpoint": "/api/products", "response_status": 304}, ACTION_SEARCH_PRODUCT),
         ({"method": "GET", "endpoint": "/api/products/prod-headphone-001", "response_status": 200}, ACTION_VIEW_PRODUCT),
+        ({"method": "GET", "endpoint": "/api/products/:id", "response_status": 200}, ACTION_VIEW_PRODUCT),
         ({"method": "POST", "endpoint": "/api/cart/items", "response_status": 201}, ACTION_ADD_TO_CART),
+        ({"method": "POST", "endpoint": "/api/checkout", "response_status": 200}, ACTION_CHECKOUT),
         ({"method": "POST", "endpoint": "/api/orders", "response_status": 201}, ACTION_CHECKOUT),
+        (
+            {
+                "method": "POST",
+                "endpoint": "/api/payments/simulate-success",
+                "response_status": 200,
+                "response_body": {"payment_status": "SUCCESS"},
+            },
+            ACTION_PAYMENT_SUCCESS,
+        ),
+        (
+            {
+                "method": "POST",
+                "endpoint": "/api/payments/simulate-failed",
+                "response_status": 200,
+                "response_body": {"payment_status": "FAILED"},
+            },
+            ACTION_PAYMENT_FAILED,
+        ),
         ({"method": "GET", "endpoint": "/api/orders/order-buyer-001", "response_status": 200}, ACTION_VIEW_ORDER),
+        ({"method": "GET", "endpoint": "/api/orders/:id", "response_status": 200}, ACTION_VIEW_ORDER),
+    ]
+
+    for log, expected_action_type in examples:
+        assert classify_action(log).action_type == expected_action_type
+
+def test_classify_action_uses_shoplite_action_name_metadata() -> None:
+    examples = [
+        ({"method": "GET", "endpoint": "/api/categories", "raw_log": {"action_name": "LIST_CATEGORIES"}}, ACTION_SEARCH_PRODUCT),
+        ({"method": "POST", "endpoint": "/api/vouchers/apply", "action_name": "APPLY_VOUCHER"}, ACTION_CHECKOUT),
+        ({"method": "GET", "endpoint": "/api/orders", "raw_log": {"action_name": "VIEW_ORDER_HISTORY"}}, ACTION_VIEW_ORDER),
     ]
 
     for log, expected_action_type in examples:

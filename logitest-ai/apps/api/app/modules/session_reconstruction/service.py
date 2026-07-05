@@ -18,6 +18,26 @@ ACTION_VIEW_PRODUCT = "view_product"
 
 UNKNOWN_SESSION_ID = "unknown"
 
+SHOPLITE_ACTION_NAME_MAP = {
+    "ADD_TO_CART": ACTION_ADD_TO_CART,
+    "APPLY_VOUCHER": ACTION_CHECKOUT,
+    "CHECKOUT": ACTION_CHECKOUT,
+    "CREATE_ORDER": ACTION_CHECKOUT,
+    "FILTER_PRODUCTS": ACTION_SEARCH_PRODUCT,
+    "LIST_CATEGORIES": ACTION_SEARCH_PRODUCT,
+    "LOGIN": ACTION_LOGIN,
+    "PAYMENT_FAILED": ACTION_PAYMENT_FAILED,
+    "PAYMENT_SUCCESS": ACTION_PAYMENT_SUCCESS,
+    "REGISTER": ACTION_LOGIN,
+    "REMOVE_VOUCHER": ACTION_CHECKOUT,
+    "SEARCH_PRODUCTS": ACTION_SEARCH_PRODUCT,
+    "SORT_PRODUCTS": ACTION_SEARCH_PRODUCT,
+    "VIEW_ORDER_DETAIL": ACTION_VIEW_ORDER,
+    "VIEW_ORDER_HISTORY": ACTION_VIEW_ORDER,
+    "VIEW_PRODUCT_DETAIL": ACTION_VIEW_PRODUCT,
+    "VIEW_PRODUCTS": ACTION_SEARCH_PRODUCT,
+}
+
 
 @dataclass(frozen=True)
 class ActionClassification:
@@ -57,16 +77,22 @@ def classify_action(log: dict[str, Any]) -> ActionClassification:
     status_code = _coerce_int(log.get("status_code", log.get("response_status")))
     response_body = log.get("response_body") if isinstance(log.get("response_body"), dict) else {}
     response_status = str(response_body.get("status") or "").lower()
+    payment_status = str(response_body.get("payment_status") or "").lower()
     parsed_endpoint = urlsplit(endpoint)
     path = normalize_endpoint_path(parsed_endpoint.path)
     query = parse_qs(parsed_endpoint.query)
     base_signal = f"{method} {path}"
+    metadata_action_type = _classify_from_action_name(log)
+
+    if metadata_action_type is not None:
+        return ActionClassification(metadata_action_type, 0.99, (base_signal, "action_name"))
 
     if method == "POST" and path == "/auth/login" and _is_success(status_code):
         return ActionClassification(ACTION_LOGIN, 0.95, (base_signal, f"status_code={status_code}"))
 
-    if method == "GET" and path == "/products" and "query" in query:
-        return ActionClassification(ACTION_SEARCH_PRODUCT, 0.95, (base_signal, "query=query"))
+    if method == "GET" and path == "/products":
+        query_signal = "query=query" if "query" in query or "keyword" in query else "product_list"
+        return ActionClassification(ACTION_SEARCH_PRODUCT, 0.95, (base_signal, query_signal))
 
     if method == "GET" and path.startswith("/products/"):
         return ActionClassification(ACTION_VIEW_PRODUCT, 0.9, (base_signal,))
@@ -75,6 +101,9 @@ def classify_action(log: dict[str, Any]) -> ActionClassification:
         return ActionClassification(ACTION_ADD_TO_CART, 0.95, (base_signal, f"status_code={status_code}"))
 
     if method == "POST" and path == "/orders" and _is_success(status_code):
+        return ActionClassification(ACTION_CHECKOUT, 0.9, (base_signal, f"status_code={status_code}"))
+
+    if method == "POST" and path == "/checkout" and _is_success(status_code):
         return ActionClassification(ACTION_CHECKOUT, 0.9, (base_signal, f"status_code={status_code}"))
 
     if method == "POST" and path == "/payments":
@@ -91,7 +120,21 @@ def classify_action(log: dict[str, Any]) -> ActionClassification:
                 (base_signal, f"status_code={status_code}", "response.status=paid"),
             )
 
-    if method == "GET" and path.startswith("/orders/"):
+    if method == "POST" and path == "/payments/simulate-failed":
+        return ActionClassification(
+            ACTION_PAYMENT_FAILED,
+            0.98,
+            (base_signal, f"status_code={status_code}", f"response.payment_status={payment_status}"),
+        )
+
+    if method == "POST" and path == "/payments/simulate-success":
+        return ActionClassification(
+            ACTION_PAYMENT_SUCCESS,
+            0.98,
+            (base_signal, f"status_code={status_code}", f"response.payment_status={payment_status}"),
+        )
+
+    if method == "GET" and (path == "/orders" or path.startswith("/orders/")):
         return ActionClassification(ACTION_VIEW_ORDER, 0.9, (base_signal,))
 
     return ActionClassification(ACTION_UNKNOWN, 0.0, (base_signal,))
@@ -108,6 +151,22 @@ def normalize_endpoint_path(endpoint: str) -> str:
     if path.startswith("/api/"):
         return path[4:] or "/"
     return path
+
+def _classify_from_action_name(log: dict[str, Any]) -> str | None:
+    action_name = _metadata_value(log, "action_name")
+    if action_name is None:
+        return None
+    return SHOPLITE_ACTION_NAME_MAP.get(str(action_name).upper())
+
+def _metadata_value(log: dict[str, Any], key: str) -> Any:
+    if log.get(key) not in (None, ""):
+        return log.get(key)
+
+    raw_log = log.get("raw_log")
+    if isinstance(raw_log, dict) and raw_log.get(key) not in (None, ""):
+        return raw_log.get(key)
+
+    return None
 
 def _parse_log_timestamp(log: dict[str, Any]) -> datetime | None:
     return _parse_timestamp(log.get("timestamp", log.get("occurred_at")))

@@ -14,6 +14,7 @@ TEST_CASE_STATUS_GENERATED = "generated"
 TEST_CASE_TYPE_API = "api"
 CHAINING_METADATA_KEYS = {"extract", "uses", "type", "journey_type"}
 DYNAMIC_RESPONSE_KEYS = {
+    "accessToken",
     "cartId",
     "cart_id",
     "createdAt",
@@ -25,6 +26,9 @@ DYNAMIC_RESPONSE_KEYS = {
     "product_id",
     "requestId",
     "request_id",
+    "refreshToken",
+    "sessionId",
+    "session_id",
     "timestamp",
     "token",
     "traceId",

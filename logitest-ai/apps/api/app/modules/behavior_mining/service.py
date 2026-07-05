@@ -19,6 +19,7 @@ from app.modules.session_reconstruction import (
     ACTION_UNKNOWN,
     ACTION_VIEW_ORDER,
     ACTION_VIEW_PRODUCT,
+    classify_action,
 )
 
 ANALYSIS_METHOD = "rule_based"
@@ -217,19 +218,27 @@ def _build_journey_drafts(session_groups: dict[str, list[dict[str, Any]]]) -> li
 
 
 def _build_steps(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    steps = [
-        {
-            "order": index + 1,
-            "action_type": record.get("action_type") or ACTION_UNKNOWN,
-            "method": record.get("method"),
-            "endpoint": record.get("endpoint"),
-            "expected_status": record.get("status_code"),
-            "response_time_ms": record.get("response_time_ms"),
-            "request_payload": record.get("request_payload") or {},
-            "response_body": record.get("response_body") or {},
-        }
-        for index, record in enumerate(records)
-    ]
+    steps = []
+    previous_action_type = None
+    for record in records:
+        action_type = _resolve_action_type(record)
+        if action_type == ACTION_UNKNOWN or action_type == previous_action_type:
+            continue
+
+        steps.append(
+            {
+                "order": len(steps) + 1,
+                "action_type": action_type,
+                "method": record.get("method"),
+                "endpoint": record.get("endpoint"),
+                "expected_status": record.get("status_code"),
+                "response_time_ms": record.get("response_time_ms"),
+                "request_payload": record.get("request_payload") or {},
+                "response_body": record.get("response_body") or {},
+            }
+        )
+        previous_action_type = action_type
+
     annotated_steps = _annotate_chaining(steps)
     for step in annotated_steps:
         step.pop("request_payload", None)
@@ -274,6 +283,12 @@ def _annotate_chaining(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
             later_step.setdefault("uses", {})[token["field_name"]] = use_location
 
     return steps
+
+def _resolve_action_type(record: dict[str, Any]) -> str:
+    action_type = str(record.get("action_type") or ACTION_UNKNOWN)
+    if action_type != ACTION_UNKNOWN:
+        return action_type
+    return classify_action(record).action_type
 
 def _iter_stable_response_fields(value: Any, path: str = "response.body") -> list[tuple[str, Any, str]]:
     fields: list[tuple[str, Any, str]] = []
@@ -450,6 +465,7 @@ def _serialize_persona_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _serialize_journey_row(row: dict[str, Any]) -> dict[str, Any]:
+    steps = list(row.get("steps") or [])
     return {
         **row,
         "id": str(row["id"]),
@@ -457,8 +473,109 @@ def _serialize_journey_row(row: dict[str, Any]) -> dict[str, Any]:
         "example_session_id": str(row["example_session_id"]) if row.get("example_session_id") else None,
         "frequency_score": _to_float(row.get("frequency_score")),
         "risk_score": _to_float(row.get("risk_score")),
-        "steps": list(row.get("steps") or []),
+        "steps": steps,
+        "behavior_analysis": _build_behavior_analysis(str(row.get("name") or "Journey"), steps),
     }
+
+def _build_behavior_analysis(name: str, steps: list[dict[str, Any]]) -> dict[str, Any]:
+    action_types = _action_set(steps)
+    behavior_type = "error" if ACTION_PAYMENT_FAILED in action_types else "normal"
+    if any(int(step.get("expected_status") or 0) >= 400 for step in steps):
+        behavior_type = "abnormal"
+    checkout_like = bool({ACTION_CHECKOUT, ACTION_VIEW_ORDER, ACTION_PAYMENT_SUCCESS} & action_types)
+    behavior_name = "Successful Checkout Journey" if checkout_like and behavior_type == "normal" else name.removeprefix("Journey: ").strip()
+    step_summary = [_explain_step(index + 1, step) for index, step in enumerate(steps)]
+    chaining = []
+    for index, step in enumerate(steps):
+        for field, path in (step.get("extract") or {}).items():
+            for later_index, later_step in enumerate(steps[index + 1 :], start=index + 2):
+                if field in (later_step.get("uses") or {}):
+                    chaining.append(
+                        {
+                            "fromStep": index + 1,
+                            "fromPath": _json_path(str(path)),
+                            "toStep": later_index,
+                            "toPath": "path parameter" if later_step["uses"][field] == "path" else str(later_step["uses"][field]),
+                        }
+                    )
+    return {
+        "behaviorName": behavior_name,
+        "behaviorType": behavior_type,
+        "userGoal": _user_goal(action_types),
+        "stepSummary": step_summary,
+        "chaining": chaining,
+        "riskNotes": _risk_notes(checkout_like, behavior_type),
+    }
+
+def _explain_step(number: int, step: dict[str, Any]) -> dict[str, Any]:
+    api = f"{step.get('method') or 'GET'} {step.get('endpoint') or '/'}"
+    return {
+        "step": number,
+        "api": api,
+        "meaning": _step_meaning(str(step.get("action_type") or ""), api),
+        "importantPayload": _payload_fields(step),
+        "importantResponse": _response_fields(step),
+        **({"inputFromPreviousStep": ", ".join(step.get("uses", {}).keys())} if step.get("uses") else {}),
+    }
+
+def _step_meaning(action_type: str, api: str) -> str:
+    meanings = {
+        ACTION_LOGIN: "User authenticates before continuing.",
+        ACTION_SEARCH_PRODUCT: "User searches or filters products.",
+        ACTION_VIEW_PRODUCT: "User views product detail before deciding.",
+        ACTION_ADD_TO_CART: "User adds an item to the cart.",
+        ACTION_CHECKOUT: "User submits checkout or creates an order.",
+        ACTION_VIEW_ORDER: "User checks the created order status.",
+        ACTION_PAYMENT_SUCCESS: "Payment succeeds and should update the order.",
+        ACTION_PAYMENT_FAILED: "Payment fails and should preserve the failure behavior.",
+    }
+    return meanings.get(action_type, f"User calls {api}.")
+
+def _payload_fields(step: dict[str, Any]) -> list[str]:
+    payload = step.get("request_payload") or {}
+    if isinstance(payload, dict) and payload:
+        return sorted(payload.keys())
+    endpoint = str(step.get("endpoint") or "")
+    if "/orders" in endpoint and str(step.get("method") or "").upper() == "POST":
+        return ["shipping_address", "cartItems", "paymentMethod"]
+    if "/cart/items" in endpoint:
+        return ["product_id", "quantity"]
+    return []
+
+def _response_fields(step: dict[str, Any]) -> list[str]:
+    response = step.get("response_body") or step.get("golden_response") or {}
+    if isinstance(response, dict) and response:
+        return sorted(response.keys())
+    endpoint = str(step.get("endpoint") or "")
+    if "/orders" in endpoint:
+        return ["order_id", "order_status", "items", "total_amount"]
+    if "/cart" in endpoint:
+        return ["items", "total_amount"]
+    if "/auth/login" in endpoint:
+        return ["accessToken", "user"]
+    return []
+
+def _user_goal(action_types: set[str]) -> str:
+    if ACTION_PAYMENT_FAILED in action_types:
+        return "User attempts checkout and receives a failed payment response."
+    if {ACTION_CHECKOUT, ACTION_VIEW_ORDER, ACTION_PAYMENT_SUCCESS} & action_types:
+        return "User creates an order and verifies the resulting order behavior."
+    if {ACTION_SEARCH_PRODUCT, ACTION_VIEW_PRODUCT} & action_types:
+        return "User discovers products before purchasing."
+    return "User performs a logged API behavior."
+
+def _risk_notes(checkout_like: bool, behavior_type: str) -> list[str]:
+    if checkout_like:
+        return [
+            "This journey is high value because it covers checkout and order status.",
+            "Regression in this flow may block revenue-related user behavior.",
+        ]
+    if behavior_type != "normal":
+        return ["This journey protects expected error handling behavior."]
+    return ["This journey protects a common user behavior."]
+
+def _json_path(path: str) -> str:
+    return "$." + path.removeprefix("response.body.").removeprefix("body.").lstrip(".")
 
 
 def _to_float(value: Any) -> float | None:
@@ -479,6 +596,7 @@ _FETCH_LOG_ROWS_SQL = """
         logs.status_code,
         logs.request_payload,
         logs.response_body,
+        logs.raw_log,
         logs.response_time_ms,
         logs.action_type,
         logs.occurred_at

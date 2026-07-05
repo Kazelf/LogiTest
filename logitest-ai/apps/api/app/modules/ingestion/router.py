@@ -76,7 +76,7 @@ def import_shoplite_logs() -> dict[str, object]:
 
 @router.get("/sessions", response_model=SessionListResponse)
 def list_sessions(
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     user_id: str | None = None,
     source: str | None = None,
@@ -109,7 +109,7 @@ def get_session_detail(external_session_id: str) -> dict[str, object]:
 
 @router.get("", response_model=LogListResponse)
 def list_logs(
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     session_id: str | None = None,
     trace_id: str | None = None,

@@ -145,6 +145,59 @@ def test_build_journey_drafts_adds_flow_type_to_steps() -> None:
     assert service.JOURNEY_ORDER_CREATION_FLOW in flow_types
     assert all(step["type"] == draft.journey_type for draft in drafts for step in draft.steps)
 
+def test_build_journey_drafts_omits_unknown_and_collapses_adjacent_duplicate_actions() -> None:
+    drafts = service._build_journey_drafts(
+        {
+            "session-order": [
+                _row("db-session-order", "unknown", 1),
+                _row("db-session-order", "login", 2),
+                _row("db-session-order", "unknown", 3),
+                _row("db-session-order", "add_to_cart", 4),
+                _row("db-session-order", "unknown", 5),
+                _row("db-session-order", "add_to_cart", 6),
+                _row("db-session-order", "checkout", 7),
+                _row("db-session-order", "checkout", 8),
+                _row("db-session-order", "view_order", 9),
+                _row("db-session-order", "view_order", 10),
+            ]
+        }
+    )
+
+    assert len(drafts) == 1
+    assert drafts[0].name == "Journey: ORDER_CREATION_FLOW - login > add_to_cart > checkout > view_order"
+    assert [step["action_type"] for step in drafts[0].steps] == ["login", "add_to_cart", "checkout", "view_order"]
+    assert [step["order"] for step in drafts[0].steps] == [1, 2, 3, 4]
+
+def test_build_journey_drafts_reclassifies_imported_unknown_actions() -> None:
+    drafts = service._build_journey_drafts(
+        {
+            "session-order": [
+                _row("db-session-order", "unknown", 1, method="POST", endpoint="/api/auth/login", status_code=200),
+                _row(
+                    "db-session-order",
+                    "unknown",
+                    2,
+                    method="POST",
+                    endpoint="/api/vouchers/apply",
+                    raw_log={"action_name": "APPLY_VOUCHER"},
+                    status_code=200,
+                ),
+                _row(
+                    "db-session-order",
+                    "unknown",
+                    3,
+                    method="GET",
+                    endpoint="/api/orders",
+                    raw_log={"action_name": "VIEW_ORDER_HISTORY"},
+                    status_code=200,
+                ),
+            ]
+        }
+    )
+
+    assert len(drafts) == 1
+    assert drafts[0].name == "Journey: ORDER_CREATION_FLOW - login > checkout > view_order"
+
 def test_build_steps_extracts_and_uses_order_id_chaining() -> None:
     steps = service._build_steps(
         [
@@ -180,6 +233,7 @@ def _row(
     endpoint: str | None = None,
     request_payload: dict | None = None,
     response_body: dict | None = None,
+    raw_log: dict | None = None,
     status_code: int = 200,
 ) -> dict:
     return {
@@ -191,6 +245,7 @@ def _row(
         "action_type": action_type,
         "request_payload": request_payload or {},
         "response_body": response_body or {},
+        "raw_log": raw_log or {},
     }
 
 

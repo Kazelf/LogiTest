@@ -12,6 +12,7 @@ def test_build_search_query_uses_match_all_without_time_range() -> None:
 
     assert query == {
         "query": {"match_all": {}},
+        "from": 0,
         "size": 25,
         "sort": [{"timestamp": {"order": "asc"}}],
     }
@@ -40,6 +41,21 @@ def test_build_search_query_uses_timestamp_range_when_provided() -> None:
     ]
 
 
+def test_build_search_query_can_use_exclusive_start_time() -> None:
+    start_time = datetime(2026, 6, 24, 10, 0, tzinfo=timezone.utc)
+
+    query = elasticsearch_client._build_search_query(
+        start_time=start_time,
+        end_time=None,
+        limit=50,
+        start_exclusive=True,
+    )
+
+    assert query["query"]["bool"]["filter"] == [
+        {"range": {"timestamp": {"gt": "2026-06-24T10:00:00+00:00"}}}
+    ]
+
+
 def test_search_logs_posts_to_configured_index(monkeypatch) -> None:
     calls = []
 
@@ -61,6 +77,27 @@ def test_search_logs_posts_to_configured_index(monkeypatch) -> None:
     assert calls[0]["json"]["size"] == 10
     assert calls[0]["timeout"] == 10.0
 
+def test_search_logs_pages_until_elasticsearch_returns_short_page(monkeypatch) -> None:
+    calls = []
+    pages = [
+        [{"_id": "log-1"}, {"_id": "log-2"}],
+        [{"_id": "log-3"}],
+    ]
+
+    def fake_post(url: str, json: dict, timeout: float) -> httpx.Response:
+        calls.append(json)
+        return httpx.Response(
+            200,
+            request=httpx.Request("POST", url),
+            json={"hits": {"hits": pages[len(calls) - 1]}},
+        )
+
+    monkeypatch.setattr(elasticsearch_client.httpx, "post", fake_post)
+
+    hits = elasticsearch_client.search_logs(index="logitest-demo-logs", page_size=2)
+
+    assert hits == [{"_id": "log-1"}, {"_id": "log-2"}, {"_id": "log-3"}]
+    assert [call["from"] for call in calls] == [0, 2]
 
 def test_search_logs_wraps_http_errors(monkeypatch) -> None:
     def fake_post(url: str, json: dict, timeout: float) -> httpx.Response:
