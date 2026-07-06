@@ -35,8 +35,12 @@ JOURNEY_UNKNOWN_FLOW = "UNKNOWN_FLOW"
 CHAINING_FIELD_NAMES = {
     "cartId",
     "cart_id",
+    "cartItemId",
+    "cart_item_id",
     "orderId",
     "order_id",
+    "paymentId",
+    "payment_id",
     "productId",
     "product_id",
     "userId",
@@ -301,7 +305,7 @@ def _iter_stable_response_fields(value: Any, path: str = "response.body") -> lis
         for key, entry_value in value.items():
             entry_path = f"{path}.{key}"
             if key in CHAINING_FIELD_NAMES:
-                fields.append((key, entry_value, entry_path))
+                fields.append((_field_name_for_path(key, entry_path), entry_value, entry_path))
             fields.extend(_iter_stable_response_fields(entry_value, entry_path))
     elif isinstance(value, list):
         for index, item in enumerate(value):
@@ -323,6 +327,12 @@ def _contains_value(candidate: Any, expected: Any) -> bool:
     if isinstance(candidate, list):
         return any(_contains_value(value, expected) for value in candidate)
     return candidate == expected or str(candidate) == str(expected)
+
+def _field_name_for_path(key: str, path: str) -> str:
+    if "[" not in path:
+        return key
+    suffix = path.rsplit("[", 1)[-1].split("]", 1)[0]
+    return f"{key}_{suffix}" if suffix.isdigit() else key
 
 
 def _detect_persona(action_types: set[str]) -> PersonaSpec:

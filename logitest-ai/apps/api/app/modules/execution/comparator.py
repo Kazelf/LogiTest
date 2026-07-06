@@ -4,13 +4,18 @@ from typing import Any
 
 DEFAULT_IGNORED_PATHS = {
     "$.accessToken",
+    "$.cartItemId",
+    "$.cart_item_id",
     "$.createdAt",
     "$.created_at",
     "$.data.id",
     "$.data.orderId",
     "$.data.order_id",
     "$.meta.trace_id",
+    "$.paymentId",
+    "$.payment_id",
     "$.refreshToken",
+    "$.removed_cart_item_id",
     "$.requestId",
     "$.request_id",
     "$.sessionId",
@@ -24,12 +29,20 @@ DEFAULT_IGNORED_PATHS = {
 
 DEFAULT_IGNORED_KEYS = {
     "accessToken",
+    "cartItemId",
+    "cart_item_id",
     "createdAt",
     "created_at",
     "id",
     "orderId",
     "order_id",
+    "orderItemId",
+    "order_item_id",
+    "paymentId",
+    "payment_id",
     "refreshToken",
+    "removedCartItemId",
+    "removed_cart_item_id",
     "requestId",
     "request_id",
     "sessionId",
@@ -58,6 +71,7 @@ def compare_steps(
     ignored_fields: set[str] = set()
     actual_by_order = {int(step["order"]): step for step in actual_steps}
     expected_by_order = {int(step.get("order") or index + 1): step for index, step in enumerate(expected_steps)}
+    used_extracts = {str(name) for step in expected_steps for name in (step.get("uses") or {}).keys()}
 
     for order, expected_step in expected_by_order.items():
         actual_step = actual_by_order.get(order)
@@ -86,6 +100,10 @@ def compare_steps(
             _compare_business_fields(order, golden_response, actual_body, "$", diffs, ignored_fields)
 
         for name, path in (expected_step.get("extract") or {}).items():
+            if str(name) not in used_extracts:
+                continue
+            if name in (actual_step.get("extracted") or {}):
+                continue
             if _value_at_path({"response": {"body": actual_step.get("response_body")}, "body": actual_step.get("response_body")}, str(path)) is None:
                 diffs.append(
                     _diff(
@@ -128,6 +146,8 @@ def _compare_schema(order: int, golden: Any, actual: Any, path: str, diffs: list
             return
         for key, expected_value in golden.items():
             child_path = f"{path}.{key}"
+            if _is_ignored(child_path):
+                continue
             if key not in actual:
                 diffs.append(_diff(order, "schema", child_path, "present", "missing", "high", "Required response field is missing."))
                 continue
@@ -166,6 +186,9 @@ def _compare_business_fields(
                 _compare_business_fields(order, value, actual[index], f"{path}[{index}]", diffs, ignored_fields)
         return
     if isinstance(expected, (str, int, float, bool)) or expected is None:
+        if expected == "***MASKED***":
+            ignored_fields.add(path)
+            return
         if actual != expected:
             diffs.append(_diff(order, "business_field", path, expected, actual, "medium", "Business field mismatch."))
 

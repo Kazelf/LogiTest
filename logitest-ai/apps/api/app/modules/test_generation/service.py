@@ -17,16 +17,24 @@ DYNAMIC_RESPONSE_KEYS = {
     "accessToken",
     "cartId",
     "cart_id",
+    "cartItemId",
+    "cart_item_id",
     "createdAt",
     "created_at",
     "id",
     "orderId",
     "order_id",
+    "orderItemId",
+    "order_item_id",
+    "paymentId",
+    "payment_id",
     "productId",
     "product_id",
     "requestId",
     "request_id",
     "refreshToken",
+    "removedCartItemId",
+    "removed_cart_item_id",
     "sessionId",
     "session_id",
     "timestamp",
@@ -241,6 +249,7 @@ def _fetch_session_logs(cur: Any, session_id: str) -> list[dict[str, Any]]:
             logs.status_code,
             logs.request_payload,
             logs.response_body,
+            logs.raw_log,
             logs.response_time_ms,
             logs.action_type,
             logs.occurred_at
@@ -315,21 +324,54 @@ def _build_steps(logs: list[dict[str, Any]], journey_steps: list[dict[str, Any]]
         if step.get("order") is not None
     }
     steps: list[dict[str, Any]] = []
-    for index, row in enumerate(logs):
+    for row in logs:
+        if row.get("status_code") == 304:
+            continue
+        order = len(steps) + 1
         step = {
-            "order": index + 1,
+            "order": order,
             "action_type": row.get("action_type") or "unknown",
             "service_name": row.get("service_name"),
             "method": row.get("method"),
-            "endpoint": row.get("endpoint"),
-            "request_payload": row.get("request_payload") or {},
+            "endpoint": _concrete_endpoint(row),
+            "request_payload": _demo_request_payload(row),
             "expected_status": row.get("status_code"),
             "golden_response": row.get("response_body") or {},
             "response_time_ms": row.get("response_time_ms"),
         }
-        step.update(metadata_by_order.get(index + 1, {}))
+        step.update(metadata_by_order.get(order, {}))
         steps.append(step)
     return steps
+
+def _concrete_endpoint(row: dict[str, Any]) -> str | None:
+    endpoint = row.get("endpoint")
+    raw_log = row.get("raw_log") if isinstance(row.get("raw_log"), dict) else {}
+    path_params = raw_log.get("path_params") if isinstance(raw_log.get("path_params"), dict) else {}
+    if isinstance(endpoint, str) and ":id" in endpoint and path_params.get("id"):
+        return endpoint.replace(":id", str(path_params["id"]))
+    return endpoint
+
+def _demo_request_payload(row: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(row.get("request_payload") or {})
+    if str(row.get("method") or "").upper() == "POST" and str(row.get("endpoint") or "").endswith("/auth/login"):
+        if payload.get("email") == "***MASKED***":
+            payload["email"] = _demo_email(row.get("response_body") or {})
+        if payload.get("password") == "***MASKED***":
+            payload["password"] = "Password123"
+        payload.pop("authorization", None)
+    return payload
+
+def _demo_email(response_body: dict[str, Any]) -> str:
+    user = response_body.get("user") if isinstance(response_body, dict) else {}
+    by_name = {
+        "Normal Buyer": "normal_buyer@example.com",
+        "Product Browser": "browser_user@example.com",
+        "Hesitant Buyer": "hesitant_buyer@example.com",
+        "Voucher Hunter": "voucher_hunter@example.com",
+        "Error Case User": "error_case_user@example.com",
+        "ShopLite Admin": "admin@example.com",
+    }
+    return by_name.get(str(user.get("name") if isinstance(user, dict) else ""), "normal_buyer@example.com")
 
 
 def _build_assertions(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -385,6 +427,8 @@ def _iter_stable_business_fields(value: Any, path: str = "body") -> list[tuple[s
             entry_path = f"{path}.{key}"
             if isinstance(entry_value, (dict, list)):
                 fields.extend(_iter_stable_business_fields(entry_value, entry_path))
+            elif entry_value == "***MASKED***":
+                continue
             elif isinstance(entry_value, (str, int, float, bool)) or entry_value is None:
                 fields.append((entry_path, entry_value))
     return fields

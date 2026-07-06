@@ -26,7 +26,8 @@ def test_render_jest_supertest_generates_api_script() -> None:
 def test_render_jest_supertest_extracts_and_reuses_chained_order_id() -> None:
     code = renderers.render_script(framework=GeneratedTestFramework.JEST_SUPERTEST, test_case=_chained_order_test_case())
 
-    assert "const orderId = step1.body.data.orderId;" in code
+    assert "let orderId;" in code
+    assert "orderId = step1.body.data.orderId;" in code
     assert ".get(`/api/orders/${orderId}`)" in code
     assert 'expect(step2.body.data.status).toEqual("created");' in code
     assert "toBeLessThanOrEqual(1000);" in code

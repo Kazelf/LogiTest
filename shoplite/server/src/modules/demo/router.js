@@ -1,6 +1,7 @@
 const express = require("express");
 const { demoRegression, setDemoRegressionBug } = require("../../config/demoRegression");
 const { createHttpError } = require("../../middlewares/errorHandler");
+const { seedDatabase } = require("../../prisma/seed");
 
 const router = express.Router();
 
@@ -18,6 +19,15 @@ router.post("/regression-toggle", (req, res, next) => {
 
 router.get("/regression-toggle", (req, res) => {
   res.json({ demo_only: true, state: demoRegression });
+});
+
+router.post("/reset-state", async (req, res, next) => {
+  try {
+    await seedDatabase();
+    res.json({ demo_only: true, reset: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
 module.exports = router;

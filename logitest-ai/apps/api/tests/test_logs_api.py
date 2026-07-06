@@ -275,6 +275,7 @@ def test_get_session_detail_returns_session_and_ordered_logs(monkeypatch) -> Non
             "request_count": 7,
             "log_count": 2,
             "source": "mock_json",
+            "services": [],
             "metadata": {"source_file": "mock-data/logs.json"},
             "created_at": "2026-06-23T09:02:00Z",
         },

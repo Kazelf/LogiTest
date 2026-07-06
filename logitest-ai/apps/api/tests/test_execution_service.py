@@ -87,6 +87,36 @@ def test_compare_results_reports_regression_business_field_diff() -> None:
     assert diff["counts"]["failed"] == 1
 
 
+def test_compare_results_ignores_dynamic_item_and_payment_ids() -> None:
+    diff = service._compare_results(
+        [
+            {
+                "order": 1,
+                "expected_status": 200,
+                "golden_response": {
+                    "removed_cart_item_id": "old-cart-item",
+                    "payment_id": "old-payment",
+                    "items": [{"order_item_id": "old-order-item", "name": "Dell Inspiron 15"}],
+                },
+            }
+        ],
+        [],
+        [
+            {
+                "order": 1,
+                "status_code": 200,
+                "duration_ms": 30,
+                "response_body": {
+                    "removed_cart_item_id": "new-cart-item",
+                    "payment_id": "new-payment",
+                    "items": [{"order_item_id": "new-order-item", "name": "Dell Inspiron 15"}],
+                },
+            }
+        ],
+    )
+
+    assert diff["status"] == "passed"
+
 def test_replace_request_body_uses_matches_camel_and_snake_keys() -> None:
     replaced = service._replace_request_body_uses(
         {"order_id": "order-old", "nested": {"paymentId": "payment-old"}},
@@ -96,6 +126,22 @@ def test_replace_request_body_uses_matches_camel_and_snake_keys() -> None:
 
     assert replaced == {"order_id": "order-new", "nested": {"paymentId": "payment-new"}}
 
+
+def test_replace_path_uses_falls_back_to_current_dynamic_resource_ids() -> None:
+    assert service._replace_path_uses("/api/cart/items/old-item", {}, {"cart_item_id": "new-item"}) == "/api/cart/items/new-item"
+    assert service._replace_path_uses("/api/orders/old-order", {}, {"order_id": "new-order"}) == "/api/orders/new-order"
+
+def test_prepare_request_keeps_literal_product_id_without_body_use() -> None:
+    body, _headers = service._prepare_request(
+        {"golden_response": {}},
+        "POST",
+        "/api/cart/items",
+        {"product_id": "selected-product"},
+        None,
+        {"product_id": "first-product"},
+    )
+
+    assert body["product_id"] == "selected-product"
 
 def test_run_test_case_raises_not_found_without_persisting(monkeypatch) -> None:
     fake_connection = FakeConnection(test_case=None)

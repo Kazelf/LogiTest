@@ -131,6 +131,7 @@ export default function Home() {
   const [runDetail, setRunDetail] = useState<TestRun | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState<string>("");
+  const [statusCopied, setStatusCopied] = useState(false);
 
   const selectedJourney = useMemo(
     () => journeys.find((journey) => journey.id === selectedJourneyId) ?? null,
@@ -139,6 +140,7 @@ export default function Home() {
   const selectedRun = runDetail ?? runs.find((run) => run.id === selectedRunId) ?? null;
   const latestRun = runs[0] ?? null;
   const artifact = getArtifact(testCaseDetail);
+  const pipelineText = notice?.text ?? "Ready. Start with demo script or import mock logs, then analyze.";
 
   const setResult = (label: string, result: ImportResponse | { [key: string]: unknown }) => {
     setNotice({ type: "ok", text: `${label}: ${formatJson(result)}` });
@@ -190,6 +192,28 @@ export default function Home() {
       setBusy("");
     }
   }, [loadLists]);
+
+  const copyPipelineStatus = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(pipelineText);
+    } catch {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = pipelineText;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      } catch {
+        // Clipboard can be blocked in headless browsers.
+      }
+    } finally {
+      setStatusCopied(true);
+      window.setTimeout(() => setStatusCopied(false), 1200);
+    }
+  }, [pipelineText]);
 
   useEffect(() => {
     let ignore = false;
@@ -306,11 +330,24 @@ export default function Home() {
               <span className="font-mono text-slate-900">configured by API</span>
             </p>
           </div>
-          <div className="min-h-20 border border-slate-200 bg-slate-50 p-3 text-sm">
-            <p className="font-medium text-slate-900">{busy ? `${busy}...` : "Pipeline status"}</p>
-            <p className={notice?.type === "error" ? "mt-2 text-rose-700" : "mt-2 text-slate-600"}>
-              {notice?.text ?? "Ready. Start with demo script or import mock logs, then analyze."}
-            </p>
+          <div className="border border-slate-200 bg-slate-50 text-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2">
+              <p className="font-medium text-slate-900">{busy ? `${busy}...` : "Pipeline status"}</p>
+              <button
+                className="h-8 border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                onClick={copyPipelineStatus}
+                type="button"
+              >
+                {statusCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <pre
+              className={`max-h-32 overflow-auto whitespace-pre-wrap break-words p-3 text-xs leading-5 ${
+                notice?.type === "error" ? "text-rose-700" : "text-slate-600"
+              }`}
+            >
+              {pipelineText}
+            </pre>
           </div>
         </section>
 
@@ -604,7 +641,7 @@ function SessionsPanel({
           {detail ? (
             <>
               <KeyValue label="External ID" value={detail.session.external_session_id} />
-              <KeyValue label="Services" value={detail.session.services.join(", ") || "n/a"} />
+              <KeyValue label="Services" value={detail.session.services?.join(", ") || "n/a"} />
               <KeyValue label="Log count" value={String(detail.logs.length)} />
               <h3 className="mt-4 text-sm font-semibold">Replay order</h3>
               <ol className="mt-2 space-y-2">

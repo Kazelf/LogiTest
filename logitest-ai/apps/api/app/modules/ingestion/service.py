@@ -264,7 +264,8 @@ def get_session_detail(external_session_id: str) -> dict[str, Any]:
             sessions.source,
             sessions.metadata,
             sessions.created_at,
-            COUNT(logs.id)::int AS log_count
+            COUNT(logs.id)::int AS log_count,
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT logs.service_name), NULL) AS services
         FROM sessions
         LEFT JOIN logs ON logs.session_id = sessions.id
         WHERE sessions.external_session_id = %s
@@ -703,6 +704,7 @@ def _serialize_session_detail_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         **row,
         "id": str(row["id"]),
+        "services": list(row.get("services") or []),
         "metadata": row.get("metadata") or {},
     }
 
