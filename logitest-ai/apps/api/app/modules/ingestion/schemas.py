@@ -42,6 +42,7 @@ class ClearDatabaseResponse(BaseModel):
     cleared: bool
     deleted: dict[str, int]
     elasticsearch: dict[str, Any] | None = None
+    shoplite: dict[str, Any] | None = None
 
 class LogListItem(BaseModel):
     id: str

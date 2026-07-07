@@ -235,7 +235,7 @@ def test_import_shoplite_logs_maps_database_errors(monkeypatch) -> None:
     assert response.json() == {"detail": "Database is unavailable."}
 
 def test_clear_database_returns_deleted_counts(monkeypatch) -> None:
-    expected = {"cleared": True, "deleted": {"logs": 10, "sessions": 2}, "elasticsearch": None}
+    expected = {"cleared": True, "deleted": {"logs": 10, "sessions": 2}, "elasticsearch": None, "shoplite": None}
     monkeypatch.setattr(service, "clear_database", lambda: expected)
 
     response = client.delete("/api/logs/database")
@@ -264,6 +264,51 @@ def test_clear_database_maps_elasticsearch_errors(monkeypatch) -> None:
 
     assert response.status_code == 502
     assert response.json() == {"detail": "Elasticsearch clear failed."}
+
+def test_clear_database_local_keeps_elasticsearch_path(monkeypatch) -> None:
+    logitest_conn = FakeClearConnection({"test_runs": 1, "logs": 2, "sessions": 1})
+    called = {}
+
+    def fake_clear_index(index: str) -> dict:
+        called["index"] = index
+        return {"index": index, "cleared": True, "found": True}
+
+    def fail_shoplite_connect(*args, **kwargs) -> None:
+        raise AssertionError("local clear should not touch ShopLite database")
+
+    monkeypatch.setattr(service.settings, "elasticsearch_url", "http://localhost:9200")
+    monkeypatch.setattr(service.settings, "shoplite_database_url", "postgresql://shoplite")
+    monkeypatch.setattr(service.elasticsearch_client, "clear_index", fake_clear_index)
+    monkeypatch.setattr(service.connection, "connect", lambda: logitest_conn)
+    monkeypatch.setattr(service.psycopg, "connect", fail_shoplite_connect)
+
+    result = service.clear_database()
+
+    assert called["index"] == service.settings.demo_log_index
+    assert result["elasticsearch"] == {"index": service.settings.demo_log_index, "cleared": True, "found": True}
+    assert result["shoplite"] is None
+    assert logitest_conn.committed is True
+
+def test_clear_database_deploy_skips_elasticsearch_and_clears_shoplite(monkeypatch) -> None:
+    logitest_conn = FakeClearConnection({"test_runs": 1, "logs": 2, "sessions": 1})
+    shoplite_conn = FakeClearConnection({"request_logs": 3})
+
+    def fail_clear_index(index: str) -> None:
+        raise AssertionError("deploy clear should not call Elasticsearch")
+
+    monkeypatch.setattr(service.settings, "elasticsearch_url", "")
+    monkeypatch.setattr(service.settings, "shoplite_database_url", "postgresql://shoplite")
+    monkeypatch.setattr(service.elasticsearch_client, "clear_index", fail_clear_index)
+    monkeypatch.setattr(service.connection, "connect", lambda: logitest_conn)
+    monkeypatch.setattr(service.psycopg, "connect", lambda *args, **kwargs: shoplite_conn)
+
+    result = service.clear_database()
+
+    assert result["elasticsearch"] is None
+    assert result["shoplite"] == {"deleted": {"request_logs": 3}}
+    assert "TRUNCATE TABLE request_logs RESTART IDENTITY" in shoplite_conn.sql
+    assert logitest_conn.committed is True
+    assert shoplite_conn.committed is True
 
 def test_list_logs_returns_paginated_items(monkeypatch) -> None:
     expected = {
@@ -556,6 +601,34 @@ class FakeImportDestinationConnection:
 
     def __exit__(self, exc_type, exc, tb) -> None:
         return None
+
+    def commit(self) -> None:
+        self.committed = True
+
+class FakeClearConnection:
+    def __init__(self, counts: dict[str, int]) -> None:
+        self.counts = counts
+        self.sql = []
+        self.committed = False
+        self._row = [0]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    def cursor(self):
+        return self
+
+    def execute(self, sql: str, params: list | None = None) -> None:
+        self.sql.append(sql)
+        if sql.startswith("SELECT COUNT(*) FROM "):
+            table = sql.removeprefix("SELECT COUNT(*) FROM ")
+            self._row = [self.counts.get(table, 0)]
+
+    def fetchone(self) -> list[int]:
+        return self._row
 
     def commit(self) -> None:
         self.committed = True
