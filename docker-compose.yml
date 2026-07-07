@@ -41,8 +41,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    env_file:
-      - ./logitest-ai/.env
     container_name: logitest-shoplite-app
     restart: unless-stopped
     environment:
