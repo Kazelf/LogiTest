@@ -173,6 +173,35 @@ def test_build_test_case_draft_merges_journey_chaining_metadata() -> None:
     assert {"order": 1, "type": "business_field", "expected": {"path": "body.data.status", "value": "created"}} in draft["assertions"]
     assert {"order": 1, "type": "response_time_ms", "expected": {"max_ms": 1000}} in draft["assertions"]
 
+def test_build_test_case_draft_replays_journey_steps_not_noisy_session_history() -> None:
+    journey = {
+        **_journey(),
+        "steps": [
+            {"order": 1, "action_type": "login"},
+            {"order": 2, "action_type": "add_to_cart"},
+            {"order": 3, "action_type": "checkout", "extract": {"orderId": "response.body.orderId"}},
+            {"order": 4, "action_type": "view_order", "uses": {"orderId": "path"}},
+        ],
+    }
+    logs = [
+        _log("POST", "/api/auth/login", 200, {"email": "user@example.com"}, {"token": "abc"}, "login"),
+        _log("GET", "/api/products", 200, {}, {"result_count": 7}, "search_product"),
+        _log("GET", "/api/products", 200, {}, {"result_count": 7}, "search_product"),
+        _log("POST", "/api/cart/items", 201, {"product_id": "product-1"}, {"cart_item_id": "item-1"}, "add_to_cart"),
+        _log("GET", "/api/products/product-1", 200, {}, {"product_id": "product-1"}, "view_product"),
+        _log("POST", "/api/orders", 201, {}, {"orderId": "order-001", "status": "created"}, "checkout"),
+        _log("GET", "/api/products", 304, {}, {}, "search_product"),
+        _log("GET", "/api/orders/order-001", 200, {}, {"orderId": "order-001", "status": "created"}, "view_order"),
+    ]
+
+    draft = service._build_test_case_draft(journey, logs)
+
+    assert [step["action_type"] for step in draft["steps"]] == ["login", "add_to_cart", "checkout", "view_order"]
+    assert draft["steps"][2]["extract"] == {"orderId": "response.body.orderId"}
+    assert draft["steps"][3]["uses"] == {"orderId": "path"}
+    assert draft["golden_response"]["step_count"] == 4
+    assert draft["golden_response"]["final_status_code"] == 200
+
 def _journey() -> dict:
     return {
         "id": "journey-id",

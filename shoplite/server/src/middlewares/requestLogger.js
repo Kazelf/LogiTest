@@ -30,6 +30,10 @@ function maskSensitive(value) {
 }
 
 function requestLogger(req, res, next) {
+  if (shouldSkipRequestLog(req)) {
+    return next();
+  }
+
   const startedAt = Date.now();
   const traceId = req.headers["x-trace-id"] || `trace_${randomUUID()}`;
   const sessionId = req.headers["x-session-id"] || `sess_${randomUUID()}`;
@@ -114,6 +118,10 @@ function requestLogger(req, res, next) {
   next();
 }
 
+function shouldSkipRequestLog(req) {
+  return req.method === "POST" && req.path === "/api/demo/reset-state";
+}
+
 function normalizeMatchedPath(routePath) {
   if (!routePath || routePath === "/") return routePath;
   return routePath.endsWith("/") ? routePath.slice(0, -1) : routePath;
@@ -145,4 +153,4 @@ function summarizeResponseBody(method, matchedPath, body) {
   return body;
 }
 
-module.exports = { requestLogger, maskSensitive, summarizeResponseBody };
+module.exports = { requestLogger, maskSensitive, shouldSkipRequestLog, summarizeResponseBody };

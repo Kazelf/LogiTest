@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
+import json
+from functools import lru_cache
 from typing import Any
 
 from psycopg.rows import dict_row
@@ -9,6 +11,7 @@ from psycopg.types.json import Jsonb
 
 from app.db import connection
 from app.modules.behavior_mining.schemas import JourneyFilters, PersonaFilters
+from app.modules.ai import gemini_client
 from app.modules.session_reconstruction import (
     ACTION_ADD_TO_CART,
     ACTION_LOGIN,
@@ -32,8 +35,12 @@ JOURNEY_UNKNOWN_FLOW = "UNKNOWN_FLOW"
 CHAINING_FIELD_NAMES = {
     "cartId",
     "cart_id",
+    "cartItemId",
+    "cart_item_id",
     "orderId",
     "order_id",
+    "paymentId",
+    "payment_id",
     "productId",
     "product_id",
     "userId",
@@ -73,6 +80,7 @@ def analyze_behavior() -> dict[str, Any]:
             persona_specs = {_detect_persona(_action_set(draft.steps)).name: _detect_persona(_action_set(draft.steps)) for draft in journey_drafts}
 
             persona_ids = _upsert_personas(cur, persona_specs.values())
+            _clear_journeys(cur)
             journeys_upserted = _upsert_journeys(cur, journey_drafts, persona_ids)
             conn.commit()
 
@@ -220,9 +228,10 @@ def _build_journey_drafts(session_groups: dict[str, list[dict[str, Any]]]) -> li
 def _build_steps(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     steps = []
     previous_action_type = None
+    seen_action_types = set()
     for record in records:
         action_type = _resolve_action_type(record)
-        if action_type == ACTION_UNKNOWN or action_type == previous_action_type:
+        if action_type == ACTION_UNKNOWN or action_type == previous_action_type or action_type in seen_action_types:
             continue
 
         steps.append(
@@ -238,9 +247,12 @@ def _build_steps(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
         previous_action_type = action_type
+        seen_action_types.add(action_type)
 
     annotated_steps = _annotate_chaining(steps)
     for step in annotated_steps:
+        step["important_payload_fields"] = _payload_fields(step)
+        step["important_response_fields"] = _response_fields(step)
         step.pop("request_payload", None)
         step.pop("response_body", None)
     return annotated_steps
@@ -296,7 +308,7 @@ def _iter_stable_response_fields(value: Any, path: str = "response.body") -> lis
         for key, entry_value in value.items():
             entry_path = f"{path}.{key}"
             if key in CHAINING_FIELD_NAMES:
-                fields.append((key, entry_value, entry_path))
+                fields.append((_field_name_for_path(key, entry_path), entry_value, entry_path))
             fields.extend(_iter_stable_response_fields(entry_value, entry_path))
     elif isinstance(value, list):
         for index, item in enumerate(value):
@@ -318,6 +330,12 @@ def _contains_value(candidate: Any, expected: Any) -> bool:
     if isinstance(candidate, list):
         return any(_contains_value(value, expected) for value in candidate)
     return candidate == expected or str(candidate) == str(expected)
+
+def _field_name_for_path(key: str, path: str) -> str:
+    if "[" not in path:
+        return key
+    suffix = path.rsplit("[", 1)[-1].split("]", 1)[0]
+    return f"{key}_{suffix}" if suffix.isdigit() else key
 
 
 def _detect_persona(action_types: set[str]) -> PersonaSpec:
@@ -433,6 +451,9 @@ def _upsert_journeys(cur: Any, journey_drafts: list[JourneyDraft], persona_ids: 
         cur.fetchone()
     return len(journey_drafts)
 
+def _clear_journeys(cur: Any) -> None:
+    cur.execute("DELETE FROM journeys", ())
+
 
 def _build_persona_filters(filters: PersonaFilters) -> tuple[str, list[Any]]:
     clauses: list[str] = []
@@ -478,6 +499,35 @@ def _serialize_journey_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 def _build_behavior_analysis(name: str, steps: list[dict[str, Any]]) -> dict[str, Any]:
+    safe_steps = _safe_analysis_steps(steps)
+    if gemini_client.gemini_available():
+        generated = _cached_gemini_behavior(name, json.dumps(safe_steps, sort_keys=True))
+        if generated:
+            return {**generated, **gemini_client.metadata(fallback_used=False)}
+    fallback = _build_rule_based_behavior_analysis(name, steps)
+    return {**fallback, **gemini_client.metadata(fallback_used=True)}
+
+@lru_cache(maxsize=128)
+def _cached_gemini_behavior(name: str, steps_json: str) -> dict[str, Any] | None:
+    return gemini_client.generate_behavior_explanation(name, json.loads(steps_json))
+
+def _safe_analysis_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "order": step.get("order"),
+            "action_type": step.get("action_type"),
+            "method": step.get("method"),
+            "endpoint": step.get("endpoint"),
+            "expected_status": step.get("expected_status"),
+            "important_payload_fields": step.get("important_payload_fields") or _payload_fields(step),
+            "important_response_fields": step.get("important_response_fields") or _response_fields(step),
+            "extract": step.get("extract") or {},
+            "uses": step.get("uses") or {},
+        }
+        for step in steps
+    ]
+
+def _build_rule_based_behavior_analysis(name: str, steps: list[dict[str, Any]]) -> dict[str, Any]:
     action_types = _action_set(steps)
     behavior_type = "error" if ACTION_PAYMENT_FAILED in action_types else "normal"
     if any(int(step.get("expected_status") or 0) >= 400 for step in steps):
@@ -532,6 +582,9 @@ def _step_meaning(action_type: str, api: str) -> str:
     return meanings.get(action_type, f"User calls {api}.")
 
 def _payload_fields(step: dict[str, Any]) -> list[str]:
+    summarized = step.get("important_payload_fields")
+    if isinstance(summarized, list):
+        return [str(field) for field in summarized]
     payload = step.get("request_payload") or {}
     if isinstance(payload, dict) and payload:
         return sorted(payload.keys())
@@ -543,6 +596,9 @@ def _payload_fields(step: dict[str, Any]) -> list[str]:
     return []
 
 def _response_fields(step: dict[str, Any]) -> list[str]:
+    summarized = step.get("important_response_fields")
+    if isinstance(summarized, list):
+        return [str(field) for field in summarized]
     response = step.get("response_body") or step.get("golden_response") or {}
     if isinstance(response, dict) and response:
         return sorted(response.keys())

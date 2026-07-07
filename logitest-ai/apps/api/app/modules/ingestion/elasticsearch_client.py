@@ -12,6 +12,18 @@ class ElasticsearchImportError(Exception):
     pass
 
 
+def clear_index(index: str) -> dict[str, Any]:
+    url = f"{settings.elasticsearch_url.rstrip('/')}/{index}"
+    try:
+        response = httpx.delete(url, timeout=10.0)
+        if response.status_code == 404:
+            return {"index": index, "cleared": True, "found": False}
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise ElasticsearchImportError("Elasticsearch clear failed.") from exc
+
+    return {"index": index, "cleared": True, "found": True}
+
 def search_logs(
     *,
     index: str,

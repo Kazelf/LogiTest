@@ -31,6 +31,15 @@ IMPORT_SCRIPT_PATH = PROJECT_ROOT / "scripts" / "import_mock_logs.py"
 MOCK_LOGS_SOURCE = "mock-data/logs.json"
 SHOPLITE_LOG_SOURCE = "shoplite_jsonl"
 DEFAULT_SHOPLITE_LOG_PATH = PROJECT_ROOT.parent / "shoplite" / "server" / "logs" / "request-logs.jsonl"
+LOGITEST_DATA_TABLES = (
+    "test_runs",
+    "test_case_artifacts",
+    "test_cases",
+    "journeys",
+    "personas",
+    "logs",
+    "sessions",
+)
 
 
 class SessionNotFoundError(Exception):
@@ -146,6 +155,16 @@ def import_shoplite_logs_from_jsonl() -> dict[str, Any]:
         "sessions": len(grouped_records),
         "counts": counts,
     }
+
+def clear_database() -> dict[str, Any]:
+    elasticsearch = elasticsearch_client.clear_index(settings.demo_log_index)
+    with connection.connect() as conn:
+        with conn.cursor() as cur:
+            deleted = _fetch_table_counts(cur, LOGITEST_DATA_TABLES)
+            cur.execute(f"TRUNCATE TABLE {', '.join(LOGITEST_DATA_TABLES)} RESTART IDENTITY CASCADE")
+            conn.commit()
+
+    return {"cleared": True, "deleted": deleted, "elasticsearch": elasticsearch}
 
 def list_logs(*, limit: int, offset: int, filters: LogFilters) -> dict[str, Any]:
     where_sql, where_params = _build_log_filters(filters)
@@ -264,7 +283,8 @@ def get_session_detail(external_session_id: str) -> dict[str, Any]:
             sessions.source,
             sessions.metadata,
             sessions.created_at,
-            COUNT(logs.id)::int AS log_count
+            COUNT(logs.id)::int AS log_count,
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT logs.service_name), NULL) AS services
         FROM sessions
         LEFT JOIN logs ON logs.session_id = sessions.id
         WHERE sessions.external_session_id = %s
@@ -633,9 +653,14 @@ def _as_int(value: Any, default: int | None) -> int | None:
 def _fetch_ingestion_counts(conn: psycopg.Connection) -> dict[str, int]:
     counts: dict[str, int] = {}
     with conn.cursor() as cur:
-        for table in ["sessions", "logs"]:
-            cur.execute(f"SELECT COUNT(*) FROM {table}")
-            counts[table] = int(cur.fetchone()[0])
+        counts = _fetch_table_counts(cur, ("sessions", "logs"))
+    return counts
+
+def _fetch_table_counts(cur: Any, tables: tuple[str, ...]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for table in tables:
+        cur.execute(f"SELECT COUNT(*) FROM {table}")
+        counts[table] = int(cur.fetchone()[0])
     return counts
 
 def _latest_imported_log_timestamp(index: str) -> datetime | None:
@@ -703,6 +728,7 @@ def _serialize_session_detail_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         **row,
         "id": str(row["id"]),
+        "services": list(row.get("services") or []),
         "metadata": row.get("metadata") or {},
     }
 

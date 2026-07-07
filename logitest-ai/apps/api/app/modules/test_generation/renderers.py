@@ -10,16 +10,24 @@ DYNAMIC_RESPONSE_KEYS = {
     "accessToken",
     "cartId",
     "cart_id",
+    "cartItemId",
+    "cart_item_id",
     "createdAt",
     "created_at",
     "id",
     "orderId",
     "order_id",
+    "orderItemId",
+    "order_item_id",
+    "paymentId",
+    "payment_id",
     "productId",
     "product_id",
     "requestId",
     "request_id",
     "refreshToken",
+    "removedCartItemId",
+    "removed_cart_item_id",
     "sessionId",
     "session_id",
     "timestamp",
@@ -87,6 +95,7 @@ def render_playwright_api(test_case: dict[str, Any]) -> str:
 
 
 def render_jest_supertest(test_case: dict[str, Any]) -> str:
+    variables = _all_extraction_variables(test_case["steps"])
     lines = [
         'import request from "supertest";',
         "",
@@ -94,7 +103,9 @@ def render_jest_supertest(test_case: dict[str, Any]) -> str:
         "",
         f'describe("{_escape_string(test_case["name"])}", () => {{',
         '  it("replays learned behavior journey", async () => {',
+        '    let authToken = "";',
     ]
+    lines.extend(f"    let {variable};" for variable in variables)
     extractions: dict[str, dict[str, Any]] = {}
     for step in test_case["steps"]:
         lines.extend(_render_supertest_step(step, expect_style="jest", extractions=extractions))
@@ -105,6 +116,7 @@ def render_jest_supertest(test_case: dict[str, Any]) -> str:
 
 
 def render_mocha_supertest(test_case: dict[str, Any]) -> str:
+    variables = _all_extraction_variables(test_case["steps"])
     lines = [
         'import request from "supertest";',
         'import { expect } from "chai";',
@@ -113,7 +125,9 @@ def render_mocha_supertest(test_case: dict[str, Any]) -> str:
         "",
         f'describe("{_escape_string(test_case["name"])}", () => {{',
         '  it("replays learned behavior journey", async () => {',
+        '    let authToken = "";',
     ]
+    lines.extend(f"    let {variable};" for variable in variables)
     extractions: dict[str, dict[str, Any]] = {}
     for step in test_case["steps"]:
         lines.extend(_render_supertest_step(step, expect_style="mocha", extractions=extractions))
@@ -160,8 +174,10 @@ def _render_supertest_step(step: dict[str, Any], *, expect_style: str, extractio
     step_name = _step_var(step)
     method = _method(step)
     endpoint = _endpoint_literal(str(step.get("endpoint") or "/"), step.get("uses") or {}, extractions)
-    payload = step.get("request_payload") or {}
+    payload = _request_payload(step)
     lines = [f"    const {step_name}Start = Date.now();", f"    const {step_name} = await request(baseURL)", f"      .{method}({endpoint})"]
+    if _needs_auth(step):
+        lines.append("      .set(\"Authorization\", `Bearer ${authToken}`)")
     if _method_has_body(method):
         lines.append(f"      .send({_to_ts_literal_with_vars(payload, extractions)})")
     lines[-1] = f"{lines[-1]};"
@@ -179,15 +195,18 @@ def _render_supertest_step(step: dict[str, Any], *, expect_style: str, extractio
         for path, value in _stable_response_fields(step):
             lines.append(f"    expect({_body_path_accessor(step_name, path)}).to.deep.equal({_to_ts_literal(value)});")
         lines.extend(_render_mocha_response_time_assertion(step, step_name))
+    if str(step.get("endpoint") or "").endswith("/auth/login"):
+        lines.append(f"    authToken = {step_name}.body.accessToken || authToken;")
     for field_name, extraction in _step_extractions(step).items():
-        lines.append(f"    const {extraction['variable']} = {_response_path_accessor(step_name, extraction['path'])};")
+        lines.append(f"    {extraction['variable']} = {_response_path_accessor(step_name, extraction['path'])};")
     return lines
 
 
 def _response_keys(step: dict[str, Any]) -> list[str]:
     golden_response = step.get("golden_response")
     if isinstance(golden_response, dict):
-        return sorted(str(key) for key in golden_response.keys())
+        derived = {"first_result_id", "first_result_name", "product_name", "result_count"}
+        return sorted(str(key) for key in golden_response.keys() if key not in derived)
     return []
 
 def _stable_response_fields(step: dict[str, Any]) -> list[tuple[str, Any]]:
@@ -204,6 +223,8 @@ def _iter_stable_response_fields(value: Any, path: str = "body") -> list[tuple[s
             if isinstance(entry_value, dict):
                 fields.extend(_iter_stable_response_fields(entry_value, entry_path))
             elif isinstance(entry_value, list):
+                continue
+            elif entry_value == "***MASKED***":
                 continue
             elif isinstance(entry_value, (str, int, float, bool)) or entry_value is None:
                 fields.append((entry_path, entry_value))
@@ -223,6 +244,40 @@ def _response_time_threshold(step: dict[str, Any]) -> int | None:
         return max(1000, response_time_ms * 3)
     return None
 
+def _all_extraction_variables(steps: list[dict[str, Any]]) -> list[str]:
+    variables = {
+        _variable_name(str(field_name))
+        for step in steps
+        for field_name in (step.get("extract") or {}).keys()
+    }
+    return sorted(variables)
+
+def _needs_auth(step: dict[str, Any]) -> bool:
+    endpoint = str(step.get("endpoint") or "")
+    return any(endpoint.startswith(prefix) for prefix in ("/api/cart", "/api/checkout", "/api/orders", "/api/payments", "/api/vouchers"))
+
+def _request_payload(step: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(step.get("request_payload") or {})
+    if str(step.get("endpoint") or "").endswith("/auth/login"):
+        if payload.get("email") == "***MASKED***":
+            payload["email"] = _demo_email(step.get("golden_response") or {})
+        if payload.get("password") == "***MASKED***":
+            payload["password"] = "Password123"
+        payload.pop("authorization", None)
+    return payload
+
+def _demo_email(golden_response: dict[str, Any]) -> str:
+    user = golden_response.get("user") if isinstance(golden_response, dict) else {}
+    by_name = {
+        "Normal Buyer": "normal_buyer@example.com",
+        "Product Browser": "browser_user@example.com",
+        "Hesitant Buyer": "hesitant_buyer@example.com",
+        "Voucher Hunter": "voucher_hunter@example.com",
+        "Error Case User": "error_case_user@example.com",
+        "ShopLite Admin": "admin@example.com",
+    }
+    return by_name.get(str(user.get("name") if isinstance(user, dict) else ""), "normal_buyer@example.com")
+
 def _step_extractions(step: dict[str, Any]) -> dict[str, dict[str, Any]]:
     golden_response = step.get("golden_response") if isinstance(step.get("golden_response"), dict) else {}
     return {
@@ -239,7 +294,13 @@ def _endpoint_literal(endpoint: str, uses: dict[str, Any], extractions: dict[str
     used_variable = False
     for field_name, location in uses.items():
         extraction = extractions.get(field_name)
-        if location != "path" or not extraction or extraction.get("value") in (None, ""):
+        if location != "path" or not extraction:
+            continue
+        if ":id" in rendered:
+            rendered = rendered.replace(":id", f"${{{extraction['variable']}}}")
+            used_variable = True
+            continue
+        if extraction.get("value") in (None, ""):
             continue
         value = str(extraction["value"])
         if value in rendered:
@@ -257,7 +318,7 @@ def _to_ts_literal_with_vars(value: Any, extractions: dict[str, dict[str, Any]])
         if not value:
             return "{}"
         entries = [
-            f"{json.dumps(str(key), ensure_ascii=False)}: {_to_ts_literal_with_vars(entry_value, extractions)}"
+            f"{json.dumps(str(key), ensure_ascii=False)}: {_variable_for_key(str(key), extractions) or _to_ts_literal_with_vars(entry_value, extractions)}"
             for key, entry_value in value.items()
         ]
         return "{\n        " + ",\n        ".join(entries) + "\n      }"
@@ -271,6 +332,13 @@ def _matching_extraction_variable(value: Any, extractions: dict[str, dict[str, A
     for extraction in extractions.values():
         extracted_value = extraction.get("value")
         if extracted_value is not None and (value == extracted_value or str(value) == str(extracted_value)):
+            return str(extraction["variable"])
+    return None
+
+def _variable_for_key(key: str, extractions: dict[str, dict[str, Any]]) -> str | None:
+    normalized = key.replace("_", "").lower()
+    for field_name, extraction in extractions.items():
+        if str(field_name).replace("_", "").lower() == normalized:
             return str(extraction["variable"])
     return None
 
@@ -288,10 +356,20 @@ def _value_at_response_path(response_body: dict[str, Any], path: str) -> Any:
 
 def _response_path_accessor(step_name: str, path: str) -> str:
     normalized = path.removeprefix("response.body").removeprefix("body").lstrip(".")
+    if normalized == "product_id":
+        return f"{step_name}.body.product_id ?? {step_name}.body.products?.[0]?.product_id ?? {step_name}.body.items?.[0]?.product_id"
     return ".".join([f"{step_name}.body", *[segment for segment in normalized.split(".") if segment]])
 
 def _body_path_accessor(step_name: str, path: str) -> str:
     normalized = path.removeprefix("body").lstrip(".")
+    if normalized == "result_count":
+        return f"{step_name}.body.count"
+    if normalized == "first_result_id":
+        return f"{step_name}.body.products?.[0]?.product_id"
+    if normalized == "first_result_name":
+        return f"{step_name}.body.products?.[0]?.name"
+    if normalized == "product_name":
+        return f"{step_name}.body.name"
     return ".".join([f"{step_name}.body", *[segment for segment in normalized.split(".") if segment]])
 
 def _variable_name(field_name: str) -> str:

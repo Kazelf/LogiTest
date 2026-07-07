@@ -57,3 +57,13 @@ describe("elasticsearchLogger", () => {
     expect(body.request_payload).toEqual({ email: "***MASKED***" });
   });
 });
+
+describe("requestLogger", () => {
+  test("skips demo reset-state requests", () => {
+    const { shouldSkipRequestLog } = require("../src/middlewares/requestLogger");
+
+    expect(shouldSkipRequestLog({ method: "POST", path: "/api/demo/reset-state" })).toBe(true);
+    expect(shouldSkipRequestLog({ method: "GET", path: "/api/demo/reset-state" })).toBe(false);
+    expect(shouldSkipRequestLog({ method: "POST", path: "/api/products" })).toBe(false);
+  });
+});

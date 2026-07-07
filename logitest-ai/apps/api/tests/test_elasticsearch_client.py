@@ -77,6 +77,33 @@ def test_search_logs_posts_to_configured_index(monkeypatch) -> None:
     assert calls[0]["json"]["size"] == 10
     assert calls[0]["timeout"] == 10.0
 
+def test_clear_index_deletes_configured_index(monkeypatch) -> None:
+    calls = []
+
+    def fake_delete(url: str, timeout: float) -> httpx.Response:
+        calls.append({"url": url, "timeout": timeout})
+        return httpx.Response(200, request=httpx.Request("DELETE", url))
+
+    monkeypatch.setattr(elasticsearch_client.httpx, "delete", fake_delete)
+    monkeypatch.setattr(elasticsearch_client.settings, "elasticsearch_url", "http://elasticsearch:9200/")
+
+    result = elasticsearch_client.clear_index("logitest-demo-logs")
+
+    assert result == {"index": "logitest-demo-logs", "cleared": True, "found": True}
+    assert calls == [{"url": "http://elasticsearch:9200/logitest-demo-logs", "timeout": 10.0}]
+
+def test_clear_index_treats_missing_index_as_cleared(monkeypatch) -> None:
+    def fake_delete(url: str, timeout: float) -> httpx.Response:
+        return httpx.Response(404, request=httpx.Request("DELETE", url))
+
+    monkeypatch.setattr(elasticsearch_client.httpx, "delete", fake_delete)
+
+    assert elasticsearch_client.clear_index("missing-index") == {
+        "index": "missing-index",
+        "cleared": True,
+        "found": False,
+    }
+
 def test_search_logs_pages_until_elasticsearch_returns_short_page(monkeypatch) -> None:
     calls = []
     pages = [

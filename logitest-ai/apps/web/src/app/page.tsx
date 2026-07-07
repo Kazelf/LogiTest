@@ -5,6 +5,7 @@ import {
   API_BASE_URL,
   api,
   type ArtifactDetail,
+  type GenerateResponse,
   type ImportResponse,
   type JourneyItem,
   type JourneyStep,
@@ -19,14 +20,36 @@ import {
 const TABS = ["Logs", "Sessions", "Journeys", "Test Cases", "Runs", "Report"] as const;
 const LOG_PAGE_SIZE = 100;
 const LIST_PAGE_SIZE = 100;
+const PIPELINE_BATCH_SIZE = 500;
 
 type Tab = (typeof TABS)[number];
 type Notice = { type: "ok" | "error"; text: string } | null;
+type PipelineStageStatus = "pending" | "running" | "done" | "failed";
+type PipelineStage = { key: string; label: string; status: PipelineStageStatus; detail?: string };
+type PipelineSummary = {
+  logsProcessed: number;
+  journeysDetected: number;
+  testCasesGenerated: number;
+  testsExecuted: number;
+  passedTests: number;
+  failedTests: number;
+  reportRunId: string | null;
+  errorMessage: string | null;
+};
 type PaginationState = { limit: number; offset: number };
 type PaginationProps = PaginationState & {
   total: number;
   onPageChange: (offset: number) => void;
 };
+
+const PIPELINE_STAGES: PipelineStage[] = [
+  { key: "import", label: "Importing logs", status: "pending" },
+  { key: "analyze", label: "Detecting journeys", status: "pending" },
+  { key: "generate", label: "Generating test cases", status: "pending" },
+  { key: "scripts", label: "Generating test scripts", status: "pending" },
+  { key: "run", label: "Running tests", status: "pending" },
+  { key: "report", label: "Building regression report", status: "pending" },
+];
 
 function formatDate(value: string | null | undefined) {
   if (!value) {
@@ -105,6 +128,23 @@ function ignoredFields(run: TestRun | null) {
   return Array.isArray(fields) ? fields.map(String) : [];
 }
 
+function freshPipelineStages() {
+  return PIPELINE_STAGES.map((stage) => ({ ...stage }));
+}
+
+function pipelineSummaryText(summary: PipelineSummary) {
+  return [
+    "Full pipeline completed.",
+    `Logs processed: ${summary.logsProcessed}`,
+    `Journeys detected: ${summary.journeysDetected}`,
+    `Test cases generated: ${summary.testCasesGenerated}`,
+    `Tests executed: ${summary.testsExecuted}`,
+    `Passed: ${summary.passedTests}`,
+    `Failed/Error: ${summary.failedTests}`,
+    `Report run: ${summary.reportRunId ?? "n/a"}`,
+  ].join("\n");
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>("Logs");
   const [logs, setLogs] = useState<LogItem[]>([]);
@@ -131,6 +171,9 @@ export default function Home() {
   const [runDetail, setRunDetail] = useState<TestRun | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState<string>("");
+  const [statusCopied, setStatusCopied] = useState(false);
+  const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>(freshPipelineStages);
+  const [pipelineSummary, setPipelineSummary] = useState<PipelineSummary | null>(null);
 
   const selectedJourney = useMemo(
     () => journeys.find((journey) => journey.id === selectedJourneyId) ?? null,
@@ -139,6 +182,9 @@ export default function Home() {
   const selectedRun = runDetail ?? runs.find((run) => run.id === selectedRunId) ?? null;
   const latestRun = runs[0] ?? null;
   const artifact = getArtifact(testCaseDetail);
+  const pipelineText =
+    notice?.text ??
+    (pipelineSummary ? pipelineSummaryText(pipelineSummary) : "Ready. Run the full pipeline or use the manual buttons.");
 
   const setResult = (label: string, result: ImportResponse | { [key: string]: unknown }) => {
     setNotice({ type: "ok", text: `${label}: ${formatJson(result)}` });
@@ -173,6 +219,7 @@ export default function Home() {
   const runAction = useCallback(async (label: string, action: () => Promise<unknown>) => {
     setBusy(label);
     setNotice(null);
+    setPipelineSummary(null);
     try {
       const result = await action();
       if (result && typeof result === "object") {
@@ -190,6 +237,129 @@ export default function Home() {
       setBusy("");
     }
   }, [loadLists]);
+
+  const clearDatabase = useCallback(() => {
+    if (!window.confirm("Delete all LogiTest database data? This cannot be undone.")) {
+      return;
+    }
+    setSelectedSessionId("");
+    setSelectedJourneyId("");
+    setSelectedTestCaseId("");
+    setSelectedRunId("");
+    setSessionDetail(null);
+    setTestCaseDetail(null);
+    setRunDetail(null);
+    void runAction("Clear database", api.clearDatabase);
+  }, [runAction]);
+
+  const setPipelineStage = useCallback(
+    (key: string, status: PipelineStageStatus, detail?: string) => {
+      setPipelineStages((current) =>
+        current.map((stage) => (stage.key === key ? { ...stage, status, detail } : stage)),
+      );
+    },
+    [],
+  );
+
+  const runFullPipeline = useCallback(async () => {
+    setBusy("Run full pipeline");
+    setNotice(null);
+    setPipelineSummary(null);
+    setPipelineStages(freshPipelineStages());
+    try {
+      setPipelineStage("import", "running");
+      const importResult = await api.importElasticsearchLogs({ newOnly: true });
+      const logsProcessed = importResult.imported_logs ?? importResult.loaded_records;
+      setPipelineStage("import", "done", `${logsProcessed} log(s) from ${importResult.source}`);
+
+      setPipelineStage("analyze", "running");
+      const analysis = await api.analyzeJourneys();
+      const journeyList = await api.listJourneys({ limit: PIPELINE_BATCH_SIZE, offset: 0 });
+      setPipelineStage("analyze", "done", `${journeyList.total} journey(s) detected`);
+
+      if (journeyList.items.length === 0) {
+        throw new Error("No journeys were detected from the imported logs.");
+      }
+
+      setPipelineStage("generate", "running");
+      const generated: GenerateResponse[] = [];
+      for (const journey of journeyList.items) {
+        generated.push(await api.generateTest(journey.id));
+      }
+      setPipelineStage("generate", "done", `${generated.length} test case(s) generated`);
+      setPipelineStage("scripts", "done", "Jest/Supertest artifacts stored");
+
+      setPipelineStage("run", "running");
+      const executed: TestRun[] = [];
+      for (const testCase of generated) {
+        executed.push(await api.runTestCase(testCase.test_case_id));
+      }
+      const passedTests = executed.filter((run) => run.status === "passed").length;
+      const failedTests = executed.length - passedTests;
+      setPipelineStage("run", "done", `${executed.length} test(s) executed`);
+
+      setPipelineStage("report", "running");
+      const reportRunId = executed[executed.length - 1]?.id ?? null;
+      const summary: PipelineSummary = {
+        logsProcessed,
+        journeysDetected: analysis.journeys_upserted || journeyList.total,
+        testCasesGenerated: generated.length,
+        testsExecuted: executed.length,
+        passedTests,
+        failedTests,
+        reportRunId,
+        errorMessage: null,
+      };
+      setPipelineSummary(summary);
+      setNotice({ type: failedTests ? "error" : "ok", text: pipelineSummaryText(summary) });
+      if (reportRunId) {
+        setSelectedRunId(reportRunId);
+        setActiveTab("Report");
+      }
+      setPipelineStage("report", "done", reportRunId ? `Report ${reportRunId.slice(0, 8)}` : "No run report");
+      await loadLists();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setNotice({ type: "error", text: `Full pipeline failed: ${message}` });
+      setPipelineSummary((current) => ({
+        logsProcessed: current?.logsProcessed ?? 0,
+        journeysDetected: current?.journeysDetected ?? 0,
+        testCasesGenerated: current?.testCasesGenerated ?? 0,
+        testsExecuted: current?.testsExecuted ?? 0,
+        passedTests: current?.passedTests ?? 0,
+        failedTests: current?.failedTests ?? 0,
+        reportRunId: current?.reportRunId ?? null,
+        errorMessage: message,
+      }));
+      setPipelineStages((current) =>
+        current.map((stage) => (stage.status === "running" ? { ...stage, status: "failed", detail: message } : stage)),
+      );
+    } finally {
+      setBusy("");
+    }
+  }, [loadLists, setPipelineStage]);
+
+  const copyPipelineStatus = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(pipelineText);
+    } catch {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = pipelineText;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+      } catch {
+        // Clipboard can be blocked in headless browsers.
+      }
+    } finally {
+      setStatusCopied(true);
+      window.setTimeout(() => setStatusCopied(false), 1200);
+    }
+  }, [pipelineText]);
 
   useEffect(() => {
     let ignore = false;
@@ -261,23 +431,12 @@ export default function Home() {
         <section className="grid gap-4 border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1.6fr_1fr]">
           <div>
             <div className="flex flex-wrap items-center gap-2">
+              <ActionButton disabled={Boolean(busy)} label="Run Full Pipeline" onClick={runFullPipeline} />
               <ActionButton
                 disabled={Boolean(busy)}
-                label="Import Mock"
-                onClick={() => runAction("Import mock logs", api.importMockLogs)}
-              />
-              <ActionButton
-                disabled={Boolean(busy)}
-                label="Import ES New"
+                label="Import from ES"
                 onClick={() =>
-                  runAction("Import new Elasticsearch logs", () => api.importElasticsearchLogs({ newOnly: true }))
-                }
-              />
-              <ActionButton
-                disabled={Boolean(busy)}
-                label="Import ES All"
-                onClick={() =>
-                  runAction("Import all Elasticsearch logs", () => api.importElasticsearchLogs({ newOnly: false }))
+                  runAction("Import Elasticsearch logs", () => api.importElasticsearchLogs({ newOnly: true }))
                 }
               />
               <ActionButton
@@ -300,17 +459,32 @@ export default function Home() {
                 }
               />
               <ActionButton disabled={Boolean(busy)} label="Refresh" onClick={() => runAction("Refresh", loadLists)} />
+              <ActionButton disabled={Boolean(busy)} label="Clear Database" onClick={clearDatabase} variant="danger" />
             </div>
             <p className="mt-3 text-sm text-slate-600">
               API: <span className="font-mono text-slate-900">{API_BASE_URL}</span> · Target:{" "}
               <span className="font-mono text-slate-900">configured by API</span>
             </p>
           </div>
-          <div className="min-h-20 border border-slate-200 bg-slate-50 p-3 text-sm">
-            <p className="font-medium text-slate-900">{busy ? `${busy}...` : "Pipeline status"}</p>
-            <p className={notice?.type === "error" ? "mt-2 text-rose-700" : "mt-2 text-slate-600"}>
-              {notice?.text ?? "Ready. Start with demo script or import mock logs, then analyze."}
-            </p>
+          <div className="border border-slate-200 bg-slate-50 text-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2">
+              <p className="font-medium text-slate-900">{busy ? `${busy}...` : "Pipeline status"}</p>
+              <button
+                className="h-8 border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                onClick={copyPipelineStatus}
+                type="button"
+              >
+                {statusCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <pre
+              className={`max-h-40 overflow-auto whitespace-pre-wrap break-words p-3 text-xs leading-5 ${
+                notice?.type === "error" ? "text-rose-700" : "text-slate-600"
+              }`}
+            >
+              {pipelineText}
+            </pre>
+            <PipelineStages stages={pipelineStages} />
           </div>
         </section>
 
@@ -417,7 +591,7 @@ function Header({
         <p className="text-sm font-semibold uppercase text-slate-500">LogiTest AI MVP</p>
         <h1 className="text-3xl font-semibold text-slate-950">Behavior regression dashboard</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          Import API logs, mine journeys, generate Jest/Supertest tests, execute against ShopLite, and inspect
+          Import Elasticsearch logs, mine journeys, generate Jest/Supertest tests, execute against ShopLite, and inspect
           regression diffs from one operational screen.
         </p>
       </div>
@@ -444,14 +618,20 @@ function ActionButton({
   disabled,
   label,
   onClick,
+  variant = "primary",
 }: {
   disabled: boolean;
   label: string;
   onClick: () => void;
+  variant?: "primary" | "danger";
 }) {
   return (
     <button
-      className="h-9 border border-slate-900 bg-slate-950 px-3 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500"
+      className={`h-9 border px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500 ${
+        variant === "danger"
+          ? "border-rose-700 bg-rose-700 hover:bg-rose-800"
+          : "border-slate-900 bg-slate-950 hover:bg-slate-800"
+      }`}
       disabled={disabled}
       onClick={onClick}
       type="button"
@@ -469,7 +649,7 @@ function LogsPanel({ logs, pagination }: { logs: LogItem[]; pagination: Paginati
   const [selectedLog, setSelectedLog] = useState<LogItem | null>(null);
 
   if (pagination.total === 0) {
-    return <EmptyState label="No logs yet. Run ShopLite journeys and import logs, or import mock logs." />;
+    return <EmptyState label="No logs yet. Run ShopLite journeys, then import logs from Elasticsearch." />;
   }
 
   const table = (
@@ -604,7 +784,7 @@ function SessionsPanel({
           {detail ? (
             <>
               <KeyValue label="External ID" value={detail.session.external_session_id} />
-              <KeyValue label="Services" value={detail.session.services.join(", ") || "n/a"} />
+              <KeyValue label="Services" value={detail.session.services?.join(", ") || "n/a"} />
               <KeyValue label="Log count" value={String(detail.logs.length)} />
               <h3 className="mt-4 text-sm font-semibold">Replay order</h3>
               <ol className="mt-2 space-y-2">
@@ -676,6 +856,13 @@ function JourneysPanel({
                 <KeyValue label="Behavior" value={journey.behavior_analysis.behaviorName ?? journey.name} />
                 <KeyValue label="Type" value={journey.behavior_analysis.behaviorType ?? "normal"} />
                 <KeyValue label="Goal" value={journey.behavior_analysis.userGoal ?? journey.description ?? "n/a"} />
+                <KeyValue
+                  label="AI"
+                  value={`${journey.behavior_analysis.ai_provider ?? "rule_based"}${
+                    journey.behavior_analysis.ai_model ? ` / ${journey.behavior_analysis.ai_model}` : ""
+                  }${journey.behavior_analysis.fallback_used ? " / fallback" : ""}`}
+                />
+                <KeyValue label="Prompt" value={journey.behavior_analysis.prompt_version ?? "n/a"} />
                 <ol className="mt-2 space-y-2">
                   {(journey.behavior_analysis.stepSummary ?? []).map((step) => (
                     <li className="border border-slate-200 bg-white p-2" key={`${step.step}-${step.api}`}>
@@ -992,6 +1179,22 @@ function Badge({ value }: { value: string | number }) {
     <span className={`inline-flex border px-2 py-1 text-xs font-medium ${statusClass(value)}`}>
       {String(value)}
     </span>
+  );
+}
+
+function PipelineStages({ stages }: { stages: PipelineStage[] }) {
+  return (
+    <ol className="grid gap-1 border-t border-slate-200 p-3">
+      {stages.map((stage) => (
+        <li className="flex items-center justify-between gap-3 text-xs" key={stage.key}>
+          <span className="text-slate-700">{stage.label}</span>
+          <span className="flex items-center gap-2 text-right">
+            {stage.detail ? <span className="hidden max-w-48 truncate text-slate-500 sm:inline">{stage.detail}</span> : null}
+            <Badge value={stage.status} />
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
