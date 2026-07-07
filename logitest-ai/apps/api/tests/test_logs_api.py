@@ -1,5 +1,7 @@
 ﻿from datetime import datetime, timezone
 
+import json
+
 import psycopg
 from fastapi.testclient import TestClient
 
@@ -164,6 +166,8 @@ def test_import_shoplite_database_reads_request_logs_and_uses_stable_ids(monkeyp
     assert records[0]["external_log_id"] == "shoplite:req-1"
     assert records[0]["request_id"] == "req-1"
     assert records[0]["request_payload"] == {"email": "***MASKED***"}
+    assert records[0]["raw_log"]["timestamp"] == "2026-07-01T10:01:00+00:00"
+    json.dumps(records[0]["raw_log"])
 
 def test_import_elasticsearch_logs_validates_limit_bounds() -> None:
     assert client.post("/api/logs/import-elasticsearch", json={"limit": 0}).status_code == 422

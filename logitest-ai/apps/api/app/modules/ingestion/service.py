@@ -574,6 +574,7 @@ def _normalize_shoplite_db_log(row: dict[str, Any], *, index: str) -> dict[str, 
         "source_index": index,
         "raw_log": {
             **masked_row,
+            "timestamp": timestamp,
             "_shoplite": {
                 "database": "shoplite",
                 "table": "request_logs",
