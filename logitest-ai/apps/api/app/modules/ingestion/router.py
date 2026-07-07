@@ -1,4 +1,6 @@
 ﻿import psycopg
+import logging
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.modules.ingestion import service
@@ -17,6 +19,7 @@ from app.modules.ingestion.schemas import (
 )
 
 router = APIRouter(prefix="/api/logs", tags=["logs"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/import-mock", response_model=ImportMockLogsResponse)
@@ -50,6 +53,7 @@ def import_elasticsearch_logs(request: ImportElasticsearchLogsRequest) -> dict[s
             detail="Elasticsearch log import failed.",
         ) from exc
     except Exception as exc:
+        logger.exception("Elasticsearch log import failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Elasticsearch log import failed.",
