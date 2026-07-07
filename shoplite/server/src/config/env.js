@@ -8,7 +8,8 @@ const env = {
   paymentRegressionBug: String(process.env.ENABLE_PAYMENT_REGRESSION_BUG || "false") === "true",
   elasticsearchLogging: String(process.env.ENABLE_ELASTICSEARCH_LOGGING || "false") === "true",
   elasticsearchUrl: process.env.ELASTICSEARCH_URL || "",
-  shopliteLogIndex: process.env.SHOPLITE_LOG_INDEX || "logitest-demo-logs"
+  shopliteLogIndex: process.env.SHOPLITE_LOG_INDEX || "logitest-demo-logs",
+  demoControlToken: process.env.DEMO_CONTROL_TOKEN || ""
 };
 
 module.exports = { env };

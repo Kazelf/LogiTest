@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlencode
 
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -368,7 +369,10 @@ def _concrete_endpoint(row: dict[str, Any]) -> str | None:
     raw_log = row.get("raw_log") if isinstance(row.get("raw_log"), dict) else {}
     path_params = raw_log.get("path_params") if isinstance(raw_log.get("path_params"), dict) else {}
     if isinstance(endpoint, str) and ":id" in endpoint and path_params.get("id"):
-        return endpoint.replace(":id", str(path_params["id"]))
+        endpoint = endpoint.replace(":id", str(path_params["id"]))
+    query = raw_log.get("query") if isinstance(raw_log.get("query"), dict) else {}
+    if isinstance(endpoint, str) and query and "?" not in endpoint:
+        return f"{endpoint}?{urlencode(query, doseq=True)}"
     return endpoint
 
 def _demo_request_payload(row: dict[str, Any]) -> dict[str, Any]:

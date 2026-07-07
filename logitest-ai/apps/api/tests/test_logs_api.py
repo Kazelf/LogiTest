@@ -1,4 +1,6 @@
-﻿import psycopg
+﻿from datetime import datetime, timezone
+
+import psycopg
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -69,6 +71,99 @@ def test_import_elasticsearch_logs_returns_summary(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json() == expected
+
+def test_import_elasticsearch_falls_back_to_shoplite_database(monkeypatch) -> None:
+    expected = {
+        "source": "shoplite_database",
+        "index": "logitest-demo-logs",
+        "loaded_records": 1,
+        "imported_logs": 1,
+        "sessions": 1,
+        "counts": {"sessions": 1, "logs": 1},
+        "limit": 5,
+        "page_size": 500,
+        "new_only": True,
+    }
+
+    def fake_import(request: ImportElasticsearchLogsRequest, *, index: str | None = None) -> dict:
+        assert request.new_only is True
+        assert request.limit == 5
+        assert index == "logitest-demo-logs"
+        return expected
+
+    monkeypatch.setattr(service.settings, "elasticsearch_url", "")
+    monkeypatch.setattr(service.settings, "shoplite_database_url", "postgresql://shoplite")
+    monkeypatch.setattr(service, "import_shoplite_logs_from_database", fake_import)
+
+    response = client.post("/api/logs/import-elasticsearch", json={"limit": 5, "new_only": True})
+
+    assert response.status_code == 200
+    assert response.json() == expected
+
+def test_import_shoplite_database_reads_request_logs_and_uses_stable_ids(monkeypatch) -> None:
+    latest = datetime(2026, 7, 1, 10, 0, tzinfo=timezone.utc)
+    source_conn = FakeShopLiteSourceConnection(
+        [
+            {
+                "id": "req-1",
+                "timestamp": datetime(2026, 7, 1, 10, 1, tzinfo=timezone.utc),
+                "environment": "production-demo",
+                "service": "shoplite-api",
+                "session_id": "sess-1",
+                "trace_id": "trace-1",
+                "user_id": "user-1",
+                "method": "POST",
+                "endpoint": "/api/auth/login",
+                "request_body": {"email": "buyer@example.com"},
+                "response_status": 200,
+                "response_body": {"ok": True},
+                "response_time_ms": 12,
+                "error_code": None,
+                "action_name": "LOGIN",
+                "business_entity": "user",
+                "business_entity_id": "user-1",
+                "journey_hint": "login",
+                "previous_step": None,
+                "next_expected_step": "browse",
+            }
+        ]
+    )
+    dest_conn = FakeImportDestinationConnection()
+    captured: dict[str, object] = {}
+
+    def fake_upsert_sessions(conn, grouped_records, *, index: str, source: str) -> dict[str, str]:
+        captured["session_source"] = source
+        captured["grouped_records"] = grouped_records
+        return {"sess-1": "session-db-id"}
+
+    def fake_upsert_logs(conn, records, session_ids, *, index: str) -> None:
+        captured["records"] = records
+        captured["session_ids"] = session_ids
+        captured["index"] = index
+
+    monkeypatch.setattr(service.settings, "shoplite_database_url", "postgresql://shoplite")
+    monkeypatch.setattr(service.psycopg, "connect", lambda *args, **kwargs: source_conn)
+    monkeypatch.setattr(service.connection, "connect", lambda: dest_conn)
+    monkeypatch.setattr(service, "_latest_imported_log_timestamp", lambda index: latest)
+    monkeypatch.setattr(service, "_upsert_elasticsearch_sessions", fake_upsert_sessions)
+    monkeypatch.setattr(service, "_upsert_elasticsearch_logs", fake_upsert_logs)
+    monkeypatch.setattr(service, "_fetch_ingestion_counts", lambda conn: {"sessions": 1, "logs": 1})
+
+    result = service.import_shoplite_logs_from_database(
+        ImportElasticsearchLogsRequest(limit=5, new_only=True),
+        index="logitest-demo-logs",
+    )
+
+    assert result["source"] == "shoplite_database"
+    assert result["imported_logs"] == 1
+    assert source_conn.params == [latest, 5]
+    assert '"timestamp"  > %s' in source_conn.sql
+    assert dest_conn.committed is True
+    assert captured["session_source"] == "shoplite_database"
+    records = captured["records"]
+    assert records[0]["external_log_id"] == "shoplite:req-1"
+    assert records[0]["request_id"] == "req-1"
+    assert records[0]["request_payload"] == {"email": "***MASKED***"}
 
 def test_import_elasticsearch_logs_validates_limit_bounds() -> None:
     assert client.post("/api/logs/import-elasticsearch", json={"limit": 0}).status_code == 422
@@ -425,3 +520,38 @@ def test_serialize_session_summary_coalesces_empty_services() -> None:
 
     assert serialized["id"] == "a1ee7525-0f2b-4d97-9860-ecfbbd723091"
     assert serialized["services"] == []
+
+class FakeShopLiteSourceConnection:
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+        self.sql = ""
+        self.params = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    def cursor(self):
+        return self
+
+    def execute(self, sql: str, params: list) -> None:
+        self.sql = sql
+        self.params = params
+
+    def fetchall(self) -> list[dict]:
+        return self.rows
+
+class FakeImportDestinationConnection:
+    def __init__(self) -> None:
+        self.committed = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+    def commit(self) -> None:
+        self.committed = True

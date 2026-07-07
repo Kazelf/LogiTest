@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     demo_log_index: str = "logitest-demo-logs"
     staging_api_base_url: str = "http://localhost:4000"
     shoplite_log_path: str | None = None
+    shoplite_database_url: str | None = None
+    demo_control_token: str | None = None
     google_api_key: str | None = None
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-1.5-flash"
