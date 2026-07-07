@@ -80,6 +80,7 @@ def analyze_behavior() -> dict[str, Any]:
             persona_specs = {_detect_persona(_action_set(draft.steps)).name: _detect_persona(_action_set(draft.steps)) for draft in journey_drafts}
 
             persona_ids = _upsert_personas(cur, persona_specs.values())
+            _clear_journeys(cur)
             journeys_upserted = _upsert_journeys(cur, journey_drafts, persona_ids)
             conn.commit()
 
@@ -227,9 +228,10 @@ def _build_journey_drafts(session_groups: dict[str, list[dict[str, Any]]]) -> li
 def _build_steps(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     steps = []
     previous_action_type = None
+    seen_action_types = set()
     for record in records:
         action_type = _resolve_action_type(record)
-        if action_type == ACTION_UNKNOWN or action_type == previous_action_type:
+        if action_type == ACTION_UNKNOWN or action_type == previous_action_type or action_type in seen_action_types:
             continue
 
         steps.append(
@@ -245,6 +247,7 @@ def _build_steps(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
         previous_action_type = action_type
+        seen_action_types.add(action_type)
 
     annotated_steps = _annotate_chaining(steps)
     for step in annotated_steps:
@@ -447,6 +450,9 @@ def _upsert_journeys(cur: Any, journey_drafts: list[JourneyDraft], persona_ids: 
         )
         cur.fetchone()
     return len(journey_drafts)
+
+def _clear_journeys(cur: Any) -> None:
+    cur.execute("DELETE FROM journeys", ())
 
 
 def _build_persona_filters(filters: PersonaFilters) -> tuple[str, list[Any]]:

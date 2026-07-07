@@ -273,7 +273,7 @@ def _build_test_case_draft(journey: dict[str, Any], logs: list[dict[str, Any]]) 
     assertions = _build_assertions(steps)
     name = _build_test_case_name(str(journey["name"]))
     description = f"Generated API test case from journey '{journey['name']}'."
-    golden_response = _build_golden_response(journey, logs)
+    golden_response = _build_golden_response(journey, steps)
 
     return {
         "journey_id": str(journey["id"]),
@@ -318,13 +318,14 @@ def _build_artifact_drafts(
 
 
 def _build_steps(logs: list[dict[str, Any]], journey_steps: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    replay_logs = _replay_logs_for_journey(logs, journey_steps or [])
     metadata_by_order = {
         int(step.get("order")): {key: step[key] for key in CHAINING_METADATA_KEYS if key in step}
         for step in journey_steps or []
         if step.get("order") is not None
     }
     steps: list[dict[str, Any]] = []
-    for row in logs:
+    for row in replay_logs:
         if row.get("status_code") == 304:
             continue
         order = len(steps) + 1
@@ -342,6 +343,25 @@ def _build_steps(logs: list[dict[str, Any]], journey_steps: list[dict[str, Any]]
         step.update(metadata_by_order.get(order, {}))
         steps.append(step)
     return steps
+
+def _replay_logs_for_journey(logs: list[dict[str, Any]], journey_steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    wanted = [str(step.get("action_type")) for step in journey_steps if step.get("action_type")]
+    if not wanted:
+        return logs
+
+    selected: list[dict[str, Any]] = []
+    search_from = 0
+    for action_type in wanted:
+        for index in range(search_from, len(logs)):
+            row = logs[index]
+            if row.get("status_code") == 304:
+                continue
+            if str(row.get("action_type") or "unknown") != action_type:
+                continue
+            selected.append(row)
+            search_from = index + 1
+            break
+    return selected or logs
 
 def _concrete_endpoint(row: dict[str, Any]) -> str | None:
     endpoint = row.get("endpoint")
@@ -434,12 +454,12 @@ def _iter_stable_business_fields(value: Any, path: str = "body") -> list[tuple[s
     return fields
 
 
-def _build_golden_response(journey: dict[str, Any], logs: list[dict[str, Any]]) -> dict[str, Any]:
-    final_log = logs[-1]
+def _build_golden_response(journey: dict[str, Any], steps: list[dict[str, Any]]) -> dict[str, Any]:
+    final_step = steps[-1] if steps else {}
     return {
-        "step_count": len(logs),
-        "final_status_code": final_log.get("status_code"),
-        "final_response_body": final_log.get("response_body") or {},
+        "step_count": len(steps),
+        "final_status_code": final_step.get("expected_status"),
+        "final_response_body": final_step.get("golden_response") or {},
         "source": {
             "journey_id": str(journey["id"]),
             "example_session_id": str(journey["example_session_id"]),

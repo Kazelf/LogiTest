@@ -8,7 +8,6 @@ This MVP follows the mentor-aligned scope:
 
 - Demo system under test: **Express.js e-commerce modular monolith**.
 - Log source: **Elasticsearch local** as the primary source.
-- Fallback source: `mock-data/logs.json`.
 - LogiTest AI platform: **FastAPI modular monolith**.
 - Dashboard: **Next.js**.
 - Test generation: **Jest + Supertest** API regression tests first.
@@ -42,7 +41,6 @@ apps/web Next.js dashboard
 - `apps/web`: Next.js frontend dashboard.
 - `apps/api`: Python FastAPI backend API organized as a modular monolith.
 - `packages/shared`: shared TypeScript schemas and utilities.
-- `mock-data`: fallback JSON logs for demo safety.
 - `database`: PostgreSQL schema and migrations.
 - `scripts`: local automation scripts for import tasks.
 - `generated-tests`: generated API test artifacts.
@@ -84,10 +82,10 @@ Open the apps:
 Generate fresh ShopLite traffic from `http://localhost:5173`, then return to the LogiTest dashboard and run:
 
 ```text
-Import ShopLite -> Analyze -> select journey -> Generate Jest -> select test case -> Run Test -> Report
+Import from ES -> Analyze -> select journey -> Generate Jest -> select test case -> Run Test -> Report
 ```
 
-If the ShopLite import has no records, use `Import Mock` as the fallback path.
+For the one-click demo path, click `Run Full Pipeline` on the dashboard. ShopLite writes logs to Elasticsearch automatically; LogiTest imports new Elasticsearch logs, analyzes journeys, generates Jest/Supertest artifacts for each journey, executes the generated tests, selects the latest regression report, and shows counts for logs, journeys, generated tests, executed tests, passed tests, and failed/error tests.
 
 ## Reset Analyzed Journeys
 
@@ -118,11 +116,10 @@ Then run `Analyze` again in the dashboard. You do not need to delete logs or ses
 Implemented foundation:
 
 - `apps/web`: Next.js operational dashboard for the logs-to-regression-report demo.
-- `apps/api`: FastAPI app scaffold with mock JSON and Elasticsearch log ingestion.
+- `apps/api`: FastAPI app scaffold with Elasticsearch log ingestion.
 - `../shoplite`: Express + React mini e-commerce system with realistic journeys, JSONL request logs, and regression cases.
 - `packages/shared`: shared TypeScript/Zod schema package.
 - `database/migrations/001_init_logitest_schema.sql`: PostgreSQL schema for sessions, logs, journeys, test cases, artifacts, and runs.
-- `mock-data/logs.json`: fallback e-commerce-like sample logs.
 - Root `../docker-compose.yml`: combined local stack with LogiTest AI, ShopLite, PostgreSQL, and Elasticsearch.
 
 Completed MVP path:

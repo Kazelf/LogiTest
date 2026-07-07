@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.modules.ingestion import service
 from app.modules.ingestion.elasticsearch_client import ElasticsearchImportError
 from app.modules.ingestion.schemas import (
+    ClearDatabaseResponse,
     ImportElasticsearchLogsRequest,
     ImportElasticsearchLogsResponse,
     ImportMockLogsResponse,
@@ -72,6 +73,21 @@ def import_shoplite_logs() -> dict[str, object]:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="ShopLite log import failed.",
+        ) from exc
+
+@router.delete("/database", response_model=ClearDatabaseResponse)
+def clear_database() -> dict[str, object]:
+    try:
+        return service.clear_database()
+    except psycopg.OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is unavailable.",
+        ) from exc
+    except ElasticsearchImportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Elasticsearch clear failed.",
         ) from exc
 
 @router.get("/sessions", response_model=SessionListResponse)

@@ -147,28 +147,38 @@ def test_build_journey_drafts_adds_flow_type_to_steps() -> None:
     assert service.JOURNEY_ORDER_CREATION_FLOW in flow_types
     assert all(step["type"] == draft.journey_type for draft in drafts for step in draft.steps)
 
-def test_build_journey_drafts_omits_unknown_and_collapses_adjacent_duplicate_actions() -> None:
+def test_build_journey_drafts_omits_unknown_and_collapses_duplicate_actions() -> None:
     drafts = service._build_journey_drafts(
         {
             "session-order": [
                 _row("db-session-order", "unknown", 1),
                 _row("db-session-order", "login", 2),
-                _row("db-session-order", "unknown", 3),
-                _row("db-session-order", "add_to_cart", 4),
-                _row("db-session-order", "unknown", 5),
-                _row("db-session-order", "add_to_cart", 6),
-                _row("db-session-order", "checkout", 7),
-                _row("db-session-order", "checkout", 8),
-                _row("db-session-order", "view_order", 9),
-                _row("db-session-order", "view_order", 10),
+                _row("db-session-order", "search_product", 3),
+                _row("db-session-order", "view_product", 4),
+                _row("db-session-order", "search_product", 5),
+                _row("db-session-order", "unknown", 6),
+                _row("db-session-order", "add_to_cart", 7),
+                _row("db-session-order", "unknown", 8),
+                _row("db-session-order", "add_to_cart", 9),
+                _row("db-session-order", "checkout", 10),
+                _row("db-session-order", "checkout", 11),
+                _row("db-session-order", "view_order", 12),
+                _row("db-session-order", "view_order", 13),
             ]
         }
     )
 
     assert len(drafts) == 1
-    assert drafts[0].name == "Journey: ORDER_CREATION_FLOW - login > add_to_cart > checkout > view_order"
-    assert [step["action_type"] for step in drafts[0].steps] == ["login", "add_to_cart", "checkout", "view_order"]
-    assert [step["order"] for step in drafts[0].steps] == [1, 2, 3, 4]
+    assert drafts[0].name == "Journey: ORDER_CREATION_FLOW - login > search_product > view_product > add_to_cart > checkout > view_order"
+    assert [step["action_type"] for step in drafts[0].steps] == [
+        "login",
+        "search_product",
+        "view_product",
+        "add_to_cart",
+        "checkout",
+        "view_order",
+    ]
+    assert [step["order"] for step in drafts[0].steps] == [1, 2, 3, 4, 5, 6]
 
 def test_build_journey_drafts_reclassifies_imported_unknown_actions() -> None:
     drafts = service._build_journey_drafts(
@@ -227,6 +237,13 @@ def test_build_steps_extracts_and_uses_order_id_chaining() -> None:
     assert steps[1]["uses"] == {"orderId": "path"}
     assert steps[0]["important_response_fields"] == ["orderId", "status"]
     assert "response_body" not in steps[0]
+
+def test_clear_journeys_deletes_stale_analysis_rows() -> None:
+    cursor = FakeCursor()
+
+    service._clear_journeys(cursor)
+
+    assert cursor.executions[-1] == ("DELETE FROM journeys", ())
 
 def test_build_behavior_analysis_uses_gemini_when_available(monkeypatch) -> None:
     service._cached_gemini_behavior.cache_clear()

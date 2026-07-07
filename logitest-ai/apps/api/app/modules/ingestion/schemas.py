@@ -38,6 +38,11 @@ class ImportShopLiteLogsResponse(BaseModel):
     sessions: int
     counts: dict[str, int]
 
+class ClearDatabaseResponse(BaseModel):
+    cleared: bool
+    deleted: dict[str, int]
+    elasticsearch: dict[str, Any] | None = None
+
 class LogListItem(BaseModel):
     id: str
     external_log_id: str | None

@@ -60,6 +60,12 @@ export type ImportResponse = {
   new_only?: boolean;
 };
 
+export type ClearDatabaseResponse = {
+  cleared: boolean;
+  deleted: Record<string, number>;
+  elasticsearch?: Record<string, unknown> | null;
+};
+
 export type LogItem = {
   id: string;
   external_log_id: string | null;
@@ -219,7 +225,6 @@ export type PageQuery = {
 };
 
 export const api = {
-  importMockLogs: () => request<ImportResponse>("/api/logs/import-mock", { method: "POST" }),
   importElasticsearchLogs: (options: { newOnly?: boolean; limit?: number | null } = {}) =>
     request<ImportResponse>("/api/logs/import-elasticsearch", {
       method: "POST",
@@ -264,4 +269,5 @@ export const api = {
   listRuns: (page: PageQuery) =>
     request<ListResponse<TestRun>>("/api/reports/test-runs", { query: page }),
   getRun: (runId: string) => request<TestRun>(`/api/reports/test-runs/${runId}`),
+  clearDatabase: () => request<ClearDatabaseResponse>("/api/logs/database", { method: "DELETE" }),
 };

@@ -135,6 +135,37 @@ def test_import_shoplite_logs_maps_database_errors(monkeypatch) -> None:
     assert response.status_code == 503
     assert response.json() == {"detail": "Database is unavailable."}
 
+def test_clear_database_returns_deleted_counts(monkeypatch) -> None:
+    expected = {"cleared": True, "deleted": {"logs": 10, "sessions": 2}, "elasticsearch": None}
+    monkeypatch.setattr(service, "clear_database", lambda: expected)
+
+    response = client.delete("/api/logs/database")
+
+    assert response.status_code == 200
+    assert response.json() == expected
+
+def test_clear_database_maps_database_errors(monkeypatch) -> None:
+    def raise_database_error() -> None:
+        raise psycopg.OperationalError("connection failed")
+
+    monkeypatch.setattr(service, "clear_database", raise_database_error)
+
+    response = client.delete("/api/logs/database")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Database is unavailable."}
+
+def test_clear_database_maps_elasticsearch_errors(monkeypatch) -> None:
+    def raise_elasticsearch_error() -> None:
+        raise ElasticsearchImportError("delete failed")
+
+    monkeypatch.setattr(service, "clear_database", raise_elasticsearch_error)
+
+    response = client.delete("/api/logs/database")
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "Elasticsearch clear failed."}
+
 def test_list_logs_returns_paginated_items(monkeypatch) -> None:
     expected = {
         "items": [
