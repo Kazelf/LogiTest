@@ -9,6 +9,13 @@ import httpx
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from app.core.metrics import (
+    REGRESSION_DETECTED_TOTAL,
+    TEST_EXECUTION_DURATION_SECONDS,
+    TEST_EXECUTION_FAIL_TOTAL,
+    TEST_EXECUTION_PASS_TOTAL,
+    TEST_EXECUTION_TOTAL,
+)
 from app.core.settings import settings
 from app.db import connection
 from app.modules.execution.comparator import compare_steps
@@ -111,6 +118,14 @@ def run_test_case(
             )
             conn.commit()
 
+    TEST_EXECUTION_TOTAL.inc()
+    TEST_EXECUTION_DURATION_SECONDS.observe(duration_ms / 1000)
+    if status == "passed":
+        TEST_EXECUTION_PASS_TOTAL.inc()
+    else:
+        TEST_EXECUTION_FAIL_TOTAL.inc()
+    if _has_regression(diff_result):
+        REGRESSION_DETECTED_TOTAL.inc()
     return run
 
 
@@ -272,6 +287,10 @@ def _compare_results(
     actual_steps: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return compare_steps(steps, assertions, actual_steps)
+
+def _has_regression(diff_result: dict[str, Any]) -> bool:
+    counts = diff_result.get("counts") if isinstance(diff_result.get("counts"), dict) else {}
+    return bool(diff_result.get("diffs") or diff_result.get("differences") or int(counts.get("failed") or 0) > 0)
 
 def _insert_test_run(
     cur: Any,

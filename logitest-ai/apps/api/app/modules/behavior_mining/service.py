@@ -9,6 +9,7 @@ from typing import Any
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from app.core.metrics import JOURNEY_DETECTED_TOTAL
 from app.db import connection
 from app.modules.behavior_mining.schemas import JourneyFilters, PersonaFilters
 from app.modules.ai import gemini_client
@@ -84,6 +85,7 @@ def analyze_behavior() -> dict[str, Any]:
             journeys_upserted = _upsert_journeys(cur, journey_drafts, persona_ids)
             conn.commit()
 
+    JOURNEY_DETECTED_TOTAL.inc(journeys_upserted)
     return {
         "sessions_analyzed": len(session_groups),
         "personas_upserted": len(persona_specs),

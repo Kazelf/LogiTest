@@ -14,6 +14,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from app.core.metrics import LOG_INGESTION_TOTAL
 from app.core.settings import settings
 from app.db import connection
 from app.modules.ingestion import elasticsearch_client
@@ -87,6 +88,7 @@ def import_mock_logs_from_dataset() -> dict[str, Any]:
         counts = importer.fetch_counts(conn)
         conn.commit()
 
+    LOG_INGESTION_TOTAL.inc(len(records))
     return {
         "source": MOCK_LOGS_SOURCE,
         "loaded_records": len(records),
@@ -121,6 +123,7 @@ def import_elasticsearch_logs(request: ImportElasticsearchLogsRequest) -> dict[s
         counts = _fetch_ingestion_counts(conn)
         conn.commit()
 
+    LOG_INGESTION_TOTAL.inc(len(records))
     return {
         "source": "elasticsearch",
         "index": index,
@@ -163,6 +166,7 @@ def import_shoplite_logs_from_database(request: ImportElasticsearchLogsRequest, 
         counts = _fetch_ingestion_counts(conn)
         conn.commit()
 
+    LOG_INGESTION_TOTAL.inc(len(records))
     return {
         "source": SHOPLITE_DB_LOG_SOURCE,
         "index": source_index,
@@ -193,6 +197,7 @@ def import_shoplite_logs_from_jsonl() -> dict[str, Any]:
         counts = _fetch_ingestion_counts(conn)
         conn.commit()
 
+    LOG_INGESTION_TOTAL.inc(len(records))
     return {
         "source": SHOPLITE_LOG_SOURCE,
         "path": str(source_path),

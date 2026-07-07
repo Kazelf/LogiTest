@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.core.metrics import AI_ERROR_TOTAL, AI_REQUEST_TOTAL
 from app.core.settings import settings
 from app.modules.ai.prompts import PROMPT_VERSION, build_behavior_explanation_prompt
 
@@ -13,6 +14,7 @@ def generate_behavior_explanation(journey_name: str, steps: list[dict[str, Any]]
     api_key = _api_key()
     if not api_key or settings.ai_provider.lower() != "gemini":
         return None
+    AI_REQUEST_TOTAL.inc()
     try:
         from google import genai
 
@@ -24,6 +26,7 @@ def generate_behavior_explanation(journey_name: str, steps: list[dict[str, Any]]
         parsed = _parse_json(response.text or "")
         return parsed if isinstance(parsed, dict) else None
     except Exception:
+        AI_ERROR_TOTAL.inc()
         if settings.ai_fallback_rule_based:
             return None
         raise

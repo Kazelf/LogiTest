@@ -78,6 +78,9 @@ Open the apps:
 - ShopLite frontend: `http://localhost:5173`
 - ShopLite API: `http://localhost:4000`
 - FastAPI health check: `http://localhost:8000/health`
+- FastAPI metrics: `http://localhost:8000/metrics`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3001`
 
 Generate fresh ShopLite traffic from `http://localhost:5173`, then return to the LogiTest dashboard and run:
 
@@ -86,6 +89,29 @@ Import from ES -> Analyze -> select journey -> Generate Jest -> select test case
 ```
 
 For the one-click demo path, click `Run Full Pipeline` on the dashboard. ShopLite writes logs to Elasticsearch automatically; LogiTest imports new Elasticsearch logs, analyzes journeys, generates Jest/Supertest artifacts for each journey, executes the generated tests, selects the latest regression report, and shows counts for logs, journeys, generated tests, executed tests, passed tests, and failed/error tests.
+
+## Observability
+
+The local MVP stack includes Prometheus and Grafana for demo observability.
+
+Local URLs:
+
+- LogiTest dashboard: `http://localhost:3000`
+- FastAPI health: `http://localhost:8000/health`
+- FastAPI metrics: `http://localhost:8000/metrics`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3001`
+
+Prometheus scrapes the FastAPI backend at `/metrics`. Grafana provisions the Prometheus datasource and a basic `LogiTest MVP Observability` dashboard showing logs ingested, journeys detected, generated test cases, test executions, pass/fail counts, regressions, test execution duration, and API request duration.
+
+Demo steps:
+
+1. Start the stack: `docker compose up --build`
+2. Import Mock logs or Import ShopLite logs.
+3. Analyze journeys.
+4. Generate tests.
+5. Run tests.
+6. Open Prometheus or Grafana and confirm the metrics increase.
 
 ## Reset Analyzed Journeys
 
@@ -228,8 +254,11 @@ Current Docker services expose:
 
 - LogiTest web: `http://localhost:3000`
 - LogiTest API health: `http://localhost:8000/health`
+- LogiTest API metrics: `http://localhost:8000/metrics`
 - LogiTest PostgreSQL: `localhost:5432`, database `logitest_ai`, user `logitest`, password `logitest`
 - Elasticsearch: `http://localhost:9200`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3001`
 - ShopLite frontend: `http://localhost:5173`
 - ShopLite API: `http://localhost:4000`
 - ShopLite PostgreSQL: `localhost:5433`, database `shoplite`, user `shoplite`, password `shoplite`

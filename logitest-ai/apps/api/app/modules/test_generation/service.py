@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from app.core.metrics import TEST_ARTIFACT_GENERATED_TOTAL, TEST_CASE_GENERATED_TOTAL
 from app.db import connection
 from app.modules.test_generation import renderers
 from app.modules.test_generation.schemas import GeneratedTestCaseFilters, GeneratedTestFramework
@@ -105,6 +106,8 @@ def generate_test_case(
             artifact_summaries = [_upsert_test_case_artifact(cur, test_case_id, artifact) for artifact in artifact_drafts]
             conn.commit()
 
+    TEST_CASE_GENERATED_TOTAL.inc()
+    TEST_ARTIFACT_GENERATED_TOTAL.inc(len(artifact_summaries))
     return {
         "test_case_id": test_case_id,
         "journey_id": str(journey["id"]),
