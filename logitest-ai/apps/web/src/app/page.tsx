@@ -3,8 +3,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   API_BASE_URL,
+  DEMO_SNAPSHOT_FALLBACK,
   api,
   type ArtifactDetail,
+  type DemoSnapshot,
   type GenerateResponse,
   type ImportResponse,
   type JourneyItem,
@@ -43,12 +45,14 @@ type PaginationProps = PaginationState & {
 };
 
 const PIPELINE_STAGES: PipelineStage[] = [
-  { key: "import", label: "Importing logs", status: "pending" },
-  { key: "analyze", label: "Detecting journeys", status: "pending" },
-  { key: "generate", label: "Generating test cases", status: "pending" },
-  { key: "scripts", label: "Generating test scripts", status: "pending" },
-  { key: "run", label: "Running tests", status: "pending" },
-  { key: "report", label: "Building regression report", status: "pending" },
+  { key: "import", label: "Import Logs", status: "pending" },
+  { key: "normalize", label: "Normalize & Mask", status: "pending" },
+  { key: "analyze", label: "Detect Journeys", status: "pending" },
+  { key: "score", label: "Score Risk/Confidence", status: "pending" },
+  { key: "generate", label: "Generate Test Cases", status: "pending" },
+  { key: "scripts", label: "Generate Jest/Supertest", status: "pending" },
+  { key: "run", label: "Run on Staging/UAT", status: "pending" },
+  { key: "report", label: "Build Regression Report", status: "pending" },
 ];
 
 function formatDate(value: string | null | undefined) {
@@ -128,6 +132,92 @@ function ignoredFields(run: TestRun | null) {
   return Array.isArray(fields) ? fields.map(String) : [];
 }
 
+function riskLabel(journey: JourneyItem) {
+  if (typeof journey.risk_score === "number") {
+    if (journey.risk_score >= 0.7) {
+      return "High";
+    }
+    if (journey.risk_score >= 0.35) {
+      return "Medium";
+    }
+    return "Low";
+  }
+  const text = `${journey.name} ${journey.steps.map((step) => step.endpoint ?? "").join(" ")}`.toLowerCase();
+  if (/(checkout|payment|order|admin|cancellation|cancel|return)/.test(text)) {
+    return "High";
+  }
+  if (/(cart|login|search|filter)/.test(text)) {
+    return "Medium";
+  }
+  return "Low";
+}
+
+function confidenceScore(journey: JourneyItem) {
+  return Math.min(0.95, 0.5 + journey.source_session_count * 0.05);
+}
+
+function snapshotFromRealData({
+  journeys,
+  journeyTotal,
+  logTotal,
+  runTotal,
+  runs,
+  sessionTotal,
+  testCaseTotal,
+}: {
+  journeys: JourneyItem[];
+  journeyTotal: number;
+  logTotal: number;
+  runTotal: number;
+  runs: TestRun[];
+  sessionTotal: number;
+  testCaseTotal: number;
+}): DemoSnapshot {
+  const failedRun = runs.find((run) => run.status !== "passed");
+  const firstDiff = reportDiffs(failedRun ?? null)[0] as Record<string, unknown> | undefined;
+  const passed = runs.filter((run) => run.status === "passed").length;
+  const failed = Math.max(0, runTotal - passed);
+  return {
+    ...DEMO_SNAPSHOT_FALLBACK,
+    mode: "Live",
+    source: "Elasticsearch / JSONL / database",
+    summary: {
+      logs: logTotal,
+      sessions: sessionTotal,
+      journeys: journeyTotal,
+      generated_tests: testCaseTotal,
+      runs: runTotal,
+      passed,
+      failed,
+      regression_caught: failedRun?.error_message ?? (failed ? "See latest failed run" : "No regression detected"),
+    },
+    journeys: journeys.slice(0, 7).map((journey) => ({
+      name: journey.name,
+      persona: journey.persona_name ?? "Unknown",
+      support: journey.source_session_count,
+      confidence: confidenceScore(journey),
+      risk: riskLabel(journey),
+      sessions: [journey.example_session_id ?? "n/a"],
+      endpoints: journey.steps.slice(0, 4).map((step) => `${step.method ?? "GET"} ${step.endpoint ?? "/"}`),
+      status: "draft",
+    })),
+    regression: failedRun
+      ? {
+          status: failedRun.status,
+          failed_assertion: String(firstDiff?.path ?? "deterministic oracle"),
+          expected: formatJson(firstDiff?.expected ?? "expected response"),
+          actual: formatJson(firstDiff?.actual ?? "actual response"),
+          diff: formatJson(failedRun.diff_result),
+          severity: "High",
+          suspected_cause: failedRun.error_message ?? "Response differed from golden oracle.",
+          related_journey: "Selected generated test",
+          related_trace: String(failedRun.runner_metadata?.trace_id ?? "n/a"),
+          framework: "Jest/Supertest",
+        }
+      : DEMO_SNAPSHOT_FALLBACK.regression,
+  };
+}
+
 function freshPipelineStages() {
   return PIPELINE_STAGES.map((stage) => ({ ...stage }));
 }
@@ -174,11 +264,30 @@ export default function Home() {
   const [statusCopied, setStatusCopied] = useState(false);
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>(freshPipelineStages);
   const [pipelineSummary, setPipelineSummary] = useState<PipelineSummary | null>(null);
+  const [demoSnapshot, setDemoSnapshot] = useState<DemoSnapshot | null>(null);
 
   const selectedJourney = useMemo(
     () => journeys.find((journey) => journey.id === selectedJourneyId) ?? null,
     [journeys, selectedJourneyId],
   );
+  const hasRealData = logTotal + sessionTotal + journeyTotal + testCaseTotal + runTotal > 0;
+  const evidence = useMemo(
+    () =>
+      demoSnapshot ??
+      (hasRealData
+        ? snapshotFromRealData({
+            journeys,
+            journeyTotal,
+            logTotal,
+            runTotal,
+            runs,
+            sessionTotal,
+            testCaseTotal,
+          })
+        : DEMO_SNAPSHOT_FALLBACK),
+    [demoSnapshot, hasRealData, journeyTotal, journeys, logTotal, runTotal, runs, sessionTotal, testCaseTotal],
+  );
+  const isDemoMode = demoSnapshot !== null || !hasRealData;
   const selectedRun = runDetail ?? runs.find((run) => run.id === selectedRunId) ?? null;
   const latestRun = runs[0] ?? null;
   const artifact = getArtifact(testCaseDetail);
@@ -220,6 +329,7 @@ export default function Home() {
     setBusy(label);
     setNotice(null);
     setPipelineSummary(null);
+    setDemoSnapshot(null);
     try {
       const result = await action();
       if (result && typeof result === "object") {
@@ -252,6 +362,26 @@ export default function Home() {
     void runAction("Clear database", api.clearDatabase);
   }, [runAction]);
 
+  const loadDemoSnapshot = useCallback(async () => {
+    setBusy("Load demo evidence");
+    setNotice(null);
+    try {
+      const snapshot = await api.getDemoSnapshot();
+      setDemoSnapshot(snapshot);
+      setNotice({ type: "ok", text: "Demo Snapshot loaded. No database writes were made." });
+    } catch (error) {
+      setDemoSnapshot(DEMO_SNAPSHOT_FALLBACK);
+      setNotice({
+        type: "ok",
+        text: `Demo Snapshot fallback loaded. API snapshot unavailable: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      });
+    } finally {
+      setBusy("");
+    }
+  }, []);
+
   const setPipelineStage = useCallback(
     (key: string, status: PipelineStageStatus, detail?: string) => {
       setPipelineStages((current) =>
@@ -264,6 +394,7 @@ export default function Home() {
   const runFullPipeline = useCallback(async () => {
     setBusy("Run full pipeline");
     setNotice(null);
+    setDemoSnapshot(null);
     setPipelineSummary(null);
     setPipelineStages(freshPipelineStages());
     try {
@@ -271,11 +402,13 @@ export default function Home() {
       const importResult = await api.importElasticsearchLogs({ newOnly: true });
       const logsProcessed = importResult.imported_logs ?? importResult.loaded_records;
       setPipelineStage("import", "done", `${logsProcessed} log(s) from ${importResult.source}`);
+      setPipelineStage("normalize", "done", "Normalized request/response logs");
 
       setPipelineStage("analyze", "running");
       const analysis = await api.analyzeJourneys();
       const journeyList = await api.listJourneys({ limit: PIPELINE_BATCH_SIZE, offset: 0 });
       setPipelineStage("analyze", "done", `${journeyList.total} journey(s) detected`);
+      setPipelineStage("score", "done", "MVP confidence and risk scoring");
 
       if (journeyList.items.length === 0) {
         throw new Error("No journeys were detected from the imported logs.");
@@ -426,12 +559,13 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-[#f6f7f9] text-slate-950">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <Header logs={logTotal} journeys={journeyTotal} tests={testCaseTotal} runs={runTotal} />
+        <Header evidence={evidence} isDemoMode={isDemoMode} />
 
         <section className="grid gap-4 border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1.6fr_1fr]">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <ActionButton disabled={Boolean(busy)} label="Run Full Pipeline" onClick={runFullPipeline} />
+              <ActionButton disabled={Boolean(busy)} label="Load Demo Evidence" onClick={loadDemoSnapshot} />
               <ActionButton
                 disabled={Boolean(busy)}
                 label="Import from ES"
@@ -443,6 +577,11 @@ export default function Home() {
                 disabled={Boolean(busy)}
                 label="Analyze"
                 onClick={() => runAction("Analyze journeys", api.analyzeJourneys)}
+              />
+              <ActionButton
+                disabled={Boolean(busy)}
+                label="Import Mock Logs"
+                onClick={() => runAction("Import mock logs", api.importMockLogs)}
               />
               <ActionButton
                 disabled={Boolean(busy) || !selectedJourneyId}
@@ -463,7 +602,8 @@ export default function Home() {
             </div>
             <p className="mt-3 text-sm text-slate-600">
               API: <span className="font-mono text-slate-900">{API_BASE_URL}</span> · Target:{" "}
-              <span className="font-mono text-slate-900">configured by API</span>
+              <span className="font-mono text-slate-900">ShopLite</span> · Data source:{" "}
+              <span className="font-mono text-slate-900">{evidence.source}</span>
             </p>
           </div>
           <div className="border border-slate-200 bg-slate-50 text-sm">
@@ -486,6 +626,21 @@ export default function Home() {
             </pre>
             <PipelineStages stages={pipelineStages} />
           </div>
+        </section>
+
+        <EvidenceSummary evidence={evidence} />
+        <PipelineSnapshot evidence={evidence} />
+        <section className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+          <JourneyIntelligence evidence={evidence} />
+          <ApprovalPanel />
+        </section>
+        <section className="grid gap-4 xl:grid-cols-2">
+          <GoldenOraclePanel evidence={evidence} />
+          <ProvenancePanel evidence={evidence} />
+        </section>
+        <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <RegressionPreview evidence={evidence} />
+          <EvaluationAndScope evidence={evidence} />
         </section>
 
         <nav className="flex gap-1 overflow-x-auto border-b border-slate-300">
@@ -574,32 +729,27 @@ export default function Home() {
   );
 }
 
-function Header({
-  logs,
-  journeys,
-  tests,
-  runs,
-}: {
-  logs: number;
-  journeys: number;
-  tests: number;
-  runs: number;
-}) {
+function Header({ evidence, isDemoMode }: { evidence: DemoSnapshot; isDemoMode: boolean }) {
   return (
-    <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <header className="flex flex-col justify-between gap-4 border-l-4 border-red-700 bg-white p-4 shadow-sm lg:flex-row lg:items-end">
       <div>
-        <p className="text-sm font-semibold uppercase text-slate-500">LogiTest AI MVP</p>
-        <h1 className="text-3xl font-semibold text-slate-950">Behavior regression dashboard</h1>
+        <p className="text-sm font-semibold uppercase text-red-700">LogiTest AI MVP</p>
+        <h1 className="text-3xl font-semibold text-slate-950">LogiTest AI - Behavior-Based Regression Testing</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
-          Import Elasticsearch logs, mine journeys, generate Jest/Supertest tests, execute against ShopLite, and inspect
-          regression diffs from one operational screen.
+          From backend logs to user journeys, generated API tests, golden oracle, and regression reports.
         </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Badge value="API status: configured" />
+          <Badge value="Target system: ShopLite" />
+          <Badge value={`Data source: ${evidence.source}`} />
+          <Badge value={`Mode: ${isDemoMode ? evidence.mode : "Live"}`} />
+        </div>
       </div>
-      <div className="grid grid-cols-4 gap-2 text-center">
-        <Metric label="Logs" value={logs} />
-        <Metric label="Journeys" value={journeys} />
-        <Metric label="Tests" value={tests} />
-        <Metric label="Runs" value={runs} />
+      <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+        <Metric label="Logs" value={evidence.summary.logs} />
+        <Metric label="Journeys" value={evidence.summary.journeys} />
+        <Metric label="Tests" value={evidence.summary.generated_tests} />
+        <Metric label="Runs" value={evidence.summary.runs} />
       </div>
     </header>
   );
@@ -610,6 +760,194 @@ function Metric({ label, value }: { label: string; value: number }) {
     <div className="min-w-20 border border-slate-200 bg-white px-3 py-2">
       <div className="text-xl font-semibold">{value}</div>
       <div className="text-xs uppercase text-slate-500">{label}</div>
+    </div>
+  );
+}
+
+function EvidenceSummary({ evidence }: { evidence: DemoSnapshot }) {
+  const cards = [
+    { label: "Logs", value: evidence.summary.logs, note: "imported from structured backend traces" },
+    { label: "Sessions", value: evidence.summary.sessions, note: "grouped by session_id / trace_id" },
+    { label: "Journeys", value: evidence.summary.journeys, note: "mined from request sequences" },
+    { label: "Generated Tests", value: evidence.summary.generated_tests, note: "Jest/Supertest API checks" },
+    { label: "Runs", value: evidence.summary.runs, note: "executed against staging/UAT" },
+    { label: "Passed", value: evidence.summary.passed, note: "matched golden oracle" },
+    { label: "Failed", value: evidence.summary.failed, note: "deterministic mismatch" },
+    { label: "Regression Caught", value: evidence.summary.failed ? 1 : 0, note: evidence.summary.regression_caught },
+  ];
+  return (
+    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {cards.map((card) => (
+        <div className="border border-slate-200 bg-white p-3 shadow-sm" key={card.label}>
+          <div className="text-2xl font-semibold text-slate-950">{card.value}</div>
+          <div className="mt-1 text-sm font-semibold">{card.label}</div>
+          <p className="mt-1 text-xs leading-5 text-slate-500">{card.note}</p>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function PipelineSnapshot({ evidence }: { evidence: DemoSnapshot }) {
+  return (
+    <Panel title="Pipeline Timeline" subtitle="Log provenance through regression reporting.">
+      <ol className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+        {evidence.pipeline.map((step, index) => (
+          <li className="border border-slate-200 bg-slate-50 p-3" key={step.label}>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm font-semibold">
+                {index + 1}. {step.label}
+              </p>
+              <Badge value={step.status} />
+            </div>
+            <p className="mt-2 text-xs leading-5 text-slate-600">{step.detail}</p>
+          </li>
+        ))}
+      </ol>
+    </Panel>
+  );
+}
+
+function JourneyIntelligence({ evidence }: { evidence: DemoSnapshot }) {
+  return (
+    <Panel title="Journey Intelligence" subtitle="MVP scoring uses session support plus simple endpoint risk rules.">
+      <Table
+        headers={["Journey", "Persona", "Support", "Confidence", "Risk", "Source Sessions", "Endpoints", "Status"]}
+        rows={evidence.journeys.map((journey) => [
+          journey.name,
+          journey.persona,
+          journey.support,
+          `${Math.round(journey.confidence * 100)}%`,
+          <Badge key={`${journey.name}-risk`} value={journey.risk} />,
+          <span className="font-mono text-xs" key={`${journey.name}-sessions`}>
+            {journey.sessions.join(", ")}
+          </span>,
+          <span className="font-mono text-xs" key={`${journey.name}-endpoints`}>
+            {journey.endpoints.join(" -> ")}
+          </span>,
+          <Badge key={`${journey.name}-status`} value={journey.status} />,
+        ])}
+      />
+    </Panel>
+  );
+}
+
+function ApprovalPanel() {
+  const actions = ["Approve Test", "Reject Test", "Mark Deprecated", "Run Approved Tests"];
+  return (
+    <Panel title="QA Approval" subtitle="Approval workflow placeholder for generated tests.">
+      <div className="grid gap-2">
+        {actions.map((action) => (
+          <button
+            className="h-9 cursor-not-allowed border border-slate-200 bg-slate-100 px-3 text-left text-sm font-medium text-slate-400"
+            disabled
+            key={action}
+            type="button"
+          >
+            {action}
+          </button>
+        ))}
+      </div>
+      {/* TODO: wire these actions when backend approval routes exist. */}
+      <p className="mt-3 text-sm text-slate-500">Backend approval routes are not in the current MVP API.</p>
+    </Panel>
+  );
+}
+
+function GoldenOraclePanel({ evidence }: { evidence: DemoSnapshot }) {
+  return (
+    <Panel title="Golden Oracle" subtitle="Deterministic pass/fail compares stable business behavior.">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <TokenList title="Assert" values={evidence.oracle.assert} />
+        <TokenList title="Ignore Dynamic Fields" values={evidence.oracle.ignore} />
+      </div>
+      <div className="mt-4 border border-slate-200 bg-slate-50 p-3 text-sm">
+        <KeyValue label="Latency" value={evidence.oracle.threshold} />
+        <KeyValue label="Layers" value="Status code, response schema, business fields, response time" />
+      </div>
+    </Panel>
+  );
+}
+
+function ProvenancePanel({ evidence }: { evidence: DemoSnapshot }) {
+  const chain = Object.entries(evidence.provenance);
+  return (
+    <Panel title="Provenance Chain" subtitle="Proof that a generated test came from observed logs.">
+      <ol className="space-y-2">
+        {chain.map(([label, value], index) => (
+          <li className="flex items-center gap-2 text-sm" key={label}>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center border border-slate-300 bg-white text-xs font-semibold">
+              {index + 1}
+            </span>
+            <span className="min-w-28 text-slate-500">{label}</span>
+            <span className="break-all font-mono text-xs font-semibold text-slate-900">{value}</span>
+          </li>
+        ))}
+      </ol>
+    </Panel>
+  );
+}
+
+function RegressionPreview({ evidence }: { evidence: DemoSnapshot }) {
+  const r = evidence.regression;
+  return (
+    <Panel title="Regression Report Preview" subtitle="Latest failing assertion with expected vs actual evidence.">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs uppercase text-slate-500">Latest status</p>
+          <Badge value={r.status ?? "n/a"} />
+        </div>
+        <div className="border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs uppercase text-slate-500">Severity</p>
+          <Badge value={r.severity ?? "n/a"} />
+        </div>
+        <div className="border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs uppercase text-slate-500">Framework</p>
+          <p className="mt-1 text-sm font-semibold">{r.framework ?? "n/a"}</p>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+        <KeyValue label="Assertion" value={r.failed_assertion ?? "n/a"} />
+        <KeyValue label="Related trace" value={r.related_trace ?? "n/a"} />
+        <KeyValue label="Expected" value={r.expected ?? "n/a"} />
+        <KeyValue label="Actual" value={r.actual ?? "n/a"} />
+        <KeyValue label="Journey" value={r.related_journey ?? "n/a"} />
+        <KeyValue label="Cause" value={r.suspected_cause ?? "n/a"} />
+      </div>
+      <pre className="mt-3 overflow-auto border border-slate-200 bg-slate-950 p-3 text-xs text-slate-100">
+        {r.diff ?? "No diff"}
+      </pre>
+    </Panel>
+  );
+}
+
+function EvaluationAndScope({ evidence }: { evidence: DemoSnapshot }) {
+  return (
+    <Panel title="Evaluation" subtitle="Demo values are labeled as snapshot evidence when live data is empty.">
+      <div className="grid gap-2 text-sm">
+        {Object.entries(evidence.evaluation).map(([label, value]) => (
+          <KeyValue key={label} label={label.replaceAll("_", " ")} value={String(value)} />
+        ))}
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <TokenList title="MVP" values={evidence.mvp} />
+        <TokenList title="Production-Ready Extension" values={evidence.production} />
+      </div>
+    </Panel>
+  );
+}
+
+function TokenList({ title, values }: { title: string; values: string[] }) {
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
+      <div className="flex flex-wrap gap-2">
+        {values.map((value) => (
+          <span className="border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700" key={value}>
+            {value}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -642,7 +980,15 @@ function ActionButton({
 }
 
 function EmptyState({ label }: { label: string }) {
-  return <div className="border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">{label}</div>;
+  return (
+    <div className="border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+      <p className="font-medium text-slate-700">{label}</p>
+      <p className="mt-2">
+        Use the dashboard actions above: Run Full Pipeline, Load Demo Evidence, Import Mock Logs, or inspect the demo
+        explanation sections.
+      </p>
+    </div>
+  );
 }
 
 function LogsPanel({ logs, pagination }: { logs: LogItem[]; pagination: PaginationProps }) {
@@ -827,7 +1173,7 @@ function JourneysPanel({
       left={
         <>
           <Table
-            headers={["Journey", "Persona", "Sessions", "Risk"]}
+            headers={["Journey", "Persona", "Support", "Confidence", "Risk", "Status"]}
             rows={journeys.map((item) => [
               <button
                 className={`text-left ${selectedId === item.id ? "font-semibold text-slate-950" : "text-slate-700"}`}
@@ -839,7 +1185,9 @@ function JourneysPanel({
               </button>,
               item.persona_name ?? "n/a",
               item.source_session_count,
-              item.risk_score ?? "n/a",
+              `${Math.round(confidenceScore(item) * 100)}%`,
+              <Badge key={`${item.id}-risk`} value={riskLabel(item)} />,
+              <Badge key={`${item.id}-status`} value="draft" />,
             ])}
           />
           <PaginationControls pagination={pagination} />
