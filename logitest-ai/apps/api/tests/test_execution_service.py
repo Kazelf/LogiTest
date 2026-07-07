@@ -39,6 +39,7 @@ def test_run_test_case_replays_steps_extracts_variables_and_persists_pass(monkey
     )
     monkeypatch.setattr(service.connection, "connect", lambda: fake_connection)
     monkeypatch.setattr(service.httpx, "Client", lambda timeout: fake_client)
+    monkeypatch.setattr(service.settings, "demo_control_token", None)
 
     run = service.run_test_case("test-case-id", target_base_url="http://shoplite.local", timeout_seconds=3)
 
@@ -143,6 +144,19 @@ def test_prepare_request_keeps_literal_product_id_without_body_use() -> None:
 
     assert body["product_id"] == "selected-product"
 
+def test_reset_demo_state_sends_token_for_remote_target(monkeypatch) -> None:
+    fake_client = FakeHttpClient([])
+    monkeypatch.setattr(service.settings, "demo_control_token", "demo-secret")
+
+    service._reset_demo_state(fake_client, "https://shoplite-api.onrender.com")
+
+    assert fake_client.posts == [
+        (
+            "https://shoplite-api.onrender.com/api/demo/reset-state",
+            {"x-demo-control-token": "demo-secret"},
+        )
+    ]
+
 def test_run_test_case_raises_not_found_without_persisting(monkeypatch) -> None:
     fake_connection = FakeConnection(test_case=None)
     monkeypatch.setattr(service.connection, "connect", lambda: fake_connection)
@@ -173,6 +187,7 @@ class FakeHttpClient:
     def __init__(self, responses: list[httpx.Response]) -> None:
         self.responses = responses
         self.requests: list[tuple[str, str, dict | None]] = []
+        self.posts: list[tuple[str, dict | None]] = []
 
     def __enter__(self):
         return self
@@ -183,6 +198,10 @@ class FakeHttpClient:
     def request(self, method: str, url: str, json: dict | None = None) -> httpx.Response:
         self.requests.append((method, url, json))
         return self.responses.pop(0)
+
+    def post(self, url: str, headers: dict | None = None) -> httpx.Response:
+        self.posts.append((url, headers))
+        return httpx.Response(200, json={"reset": True})
 
 
 class FakeConnection:

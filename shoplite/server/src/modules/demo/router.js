@@ -1,9 +1,19 @@
 const express = require("express");
+const { env } = require("../../config/env");
 const { demoRegression, setDemoRegressionBug } = require("../../config/demoRegression");
 const { createHttpError } = require("../../middlewares/errorHandler");
 const { seedDatabase } = require("../../prisma/seed");
 
 const router = express.Router();
+
+function requireDemoControl(req, _res, next) {
+  if (!env.demoControlToken || req.headers["x-demo-control-token"] === env.demoControlToken) {
+    return next();
+  }
+  return next(createHttpError(401, "UNAUTHORIZED_DEMO_CONTROL", "Demo control token is required."));
+}
+
+router.use(requireDemoControl);
 
 router.post("/regression-toggle", (req, res, next) => {
   try {

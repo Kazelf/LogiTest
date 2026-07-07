@@ -30,6 +30,7 @@ PROJECT_ROOT = _find_project_root()
 IMPORT_SCRIPT_PATH = PROJECT_ROOT / "scripts" / "import_mock_logs.py"
 MOCK_LOGS_SOURCE = "mock-data/logs.json"
 SHOPLITE_LOG_SOURCE = "shoplite_jsonl"
+SHOPLITE_DB_LOG_SOURCE = "shoplite_database"
 DEFAULT_SHOPLITE_LOG_PATH = PROJECT_ROOT.parent / "shoplite" / "server" / "logs" / "request-logs.jsonl"
 LOGITEST_DATA_TABLES = (
     "test_runs",
@@ -95,6 +96,9 @@ def import_mock_logs_from_dataset() -> dict[str, Any]:
 
 def import_elasticsearch_logs(request: ImportElasticsearchLogsRequest) -> dict[str, Any]:
     index = request.index or settings.demo_log_index
+    if not settings.elasticsearch_url and settings.shoplite_database_url:
+        return import_shoplite_logs_from_database(request, index=index)
+
     start_time = request.start_time
     if request.new_only and start_time is None:
         start_time = _latest_imported_log_timestamp(index)
@@ -121,6 +125,48 @@ def import_elasticsearch_logs(request: ImportElasticsearchLogsRequest) -> dict[s
         "source": "elasticsearch",
         "index": index,
         "loaded_records": len(hits),
+        "imported_logs": len(records),
+        "sessions": len(grouped_records),
+        "counts": counts,
+        "limit": request.limit,
+        "page_size": request.page_size,
+        "new_only": request.new_only,
+    }
+
+def import_shoplite_logs_from_database(request: ImportElasticsearchLogsRequest, *, index: str | None = None) -> dict[str, Any]:
+    if not settings.shoplite_database_url:
+        raise ElasticsearchImportError("ShopLite database URL is not configured.")
+
+    source_index = index or settings.demo_log_index
+    start_time = request.start_time
+    if request.new_only and start_time is None:
+        start_time = _latest_imported_log_timestamp(source_index)
+    start_exclusive = request.new_only and request.start_time is None and start_time is not None
+
+    rows = _fetch_shoplite_request_logs(
+        start_time=start_time,
+        end_time=request.end_time,
+        limit=request.limit,
+        start_exclusive=start_exclusive,
+    )
+    records = [_normalize_shoplite_db_log(row, index=source_index) for row in rows]
+    grouped_records = _group_normalized_records(records)
+
+    with connection.connect() as conn:
+        session_ids = _upsert_elasticsearch_sessions(
+            conn,
+            grouped_records,
+            index=source_index,
+            source=SHOPLITE_DB_LOG_SOURCE,
+        )
+        _upsert_elasticsearch_logs(conn, records, session_ids, index=source_index)
+        counts = _fetch_ingestion_counts(conn)
+        conn.commit()
+
+    return {
+        "source": SHOPLITE_DB_LOG_SOURCE,
+        "index": source_index,
+        "loaded_records": len(rows),
         "imported_logs": len(records),
         "sessions": len(grouped_records),
         "counts": counts,
@@ -442,6 +488,96 @@ def _normalize_shoplite_log(record: dict[str, Any], *, source_path: Path) -> dic
             **masked_record,
             "_shoplite": {
                 "path": str(source_path),
+            },
+        },
+    }
+
+def _fetch_shoplite_request_logs(
+    *,
+    start_time: datetime | None,
+    end_time: datetime | None,
+    limit: int | None,
+    start_exclusive: bool,
+) -> list[dict[str, Any]]:
+    where: list[str] = []
+    params: list[Any] = []
+    if start_time is not None:
+        where.append(f'"timestamp" {" >" if start_exclusive else " >="} %s')
+        params.append(start_time)
+    if end_time is not None:
+        where.append('"timestamp" <= %s')
+        params.append(end_time)
+
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    limit_sql = "LIMIT %s" if limit is not None else ""
+    if limit is not None:
+        params.append(limit)
+
+    sql = f"""
+        SELECT
+            id,
+            "timestamp" AS timestamp,
+            environment,
+            service,
+            "sessionId" AS session_id,
+            "traceId" AS trace_id,
+            "userId" AS user_id,
+            method,
+            endpoint,
+            "requestBody" AS request_body,
+            "responseStatus" AS response_status,
+            "responseBody" AS response_body,
+            "responseTimeMs" AS response_time_ms,
+            "errorCode" AS error_code,
+            "actionName" AS action_name,
+            "businessEntity" AS business_entity,
+            "businessEntityId" AS business_entity_id,
+            "journeyHint" AS journey_hint,
+            "previousStep" AS previous_step,
+            "nextExpectedStep" AS next_expected_step
+        FROM request_logs
+        {where_sql}
+        ORDER BY "timestamp" ASC, id ASC
+        {limit_sql}
+    """
+
+    with psycopg.connect(settings.shoplite_database_url, row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return list(cur.fetchall())
+
+def _normalize_shoplite_db_log(row: dict[str, Any], *, index: str) -> dict[str, Any]:
+    masked_row = mask_sensitive(row)
+    timestamp_value = masked_row.get("timestamp") or datetime.now(timezone.utc)
+    timestamp = timestamp_value.isoformat() if isinstance(timestamp_value, datetime) else str(timestamp_value)
+    response_status = masked_row.get("response_status")
+    endpoint = masked_row.get("endpoint")
+
+    return {
+        "external_log_id": f"shoplite:{masked_row.get('id')}",
+        "timestamp": timestamp,
+        "level": "error" if _as_int(response_status, 0) >= 500 else "info",
+        "service_name": masked_row.get("service") or "shoplite-api",
+        "trace_id": masked_row.get("trace_id"),
+        "session_id": masked_row.get("session_id") or "unknown-session",
+        "request_id": masked_row.get("id"),
+        "user_id": masked_row.get("user_id"),
+        "method": masked_row.get("method"),
+        "endpoint": endpoint,
+        "normalized_endpoint": normalize_endpoint(endpoint),
+        "request_headers": {},
+        "request_payload": masked_row.get("request_body") or {},
+        "response_status": _as_int(response_status, None),
+        "response_body": masked_row.get("response_body") or {},
+        "response_time_ms": _as_int(masked_row.get("response_time_ms"), None),
+        "environment": masked_row.get("environment"),
+        "source_index": index,
+        "raw_log": {
+            **masked_row,
+            "_shoplite": {
+                "database": "shoplite",
+                "table": "request_logs",
+                "id": masked_row.get("id"),
             },
         },
     }

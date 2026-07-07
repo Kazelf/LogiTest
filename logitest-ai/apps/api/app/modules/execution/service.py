@@ -535,10 +535,17 @@ def _normalize_base_url(base_url: str) -> str:
 
 def _reset_demo_state(client: httpx.Client, base_url: str) -> None:
     parsed = urlparse(base_url)
-    if parsed.hostname not in {"localhost", "127.0.0.1"} or parsed.port != 4000:
+    is_local_shoplite = parsed.hostname in {"localhost", "127.0.0.1"} and parsed.port == 4000
+    headers = None
+    if not is_local_shoplite:
+        if not settings.demo_control_token:
+            return
+        headers = {"x-demo-control-token": settings.demo_control_token}
+
+    if not is_local_shoplite and parsed.scheme not in {"http", "https"}:
         return
     try:
-        client.post(_build_url(base_url, "/api/demo/reset-state"))
+        client.post(_build_url(base_url, "/api/demo/reset-state"), headers=headers)
     except Exception:
         return
 

@@ -202,6 +202,21 @@ def test_build_test_case_draft_replays_journey_steps_not_noisy_session_history()
     assert draft["golden_response"]["step_count"] == 4
     assert draft["golden_response"]["final_status_code"] == 200
 
+def test_build_test_case_draft_preserves_get_query_filters() -> None:
+    log = _log(
+        "GET",
+        "/api/products",
+        200,
+        {},
+        {"result_count": 2, "first_result_name": "Logitech Mouse"},
+        "search_product",
+    )
+    log["raw_log"] = {"query": {"category": "Accessories"}}
+
+    draft = service._build_test_case_draft(_journey(), [log])
+
+    assert draft["steps"][0]["endpoint"] == "/api/products?category=Accessories"
+
 def _journey() -> dict:
     return {
         "id": "journey-id",
