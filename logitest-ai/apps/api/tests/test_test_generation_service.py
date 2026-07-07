@@ -202,6 +202,79 @@ def test_build_test_case_draft_replays_journey_steps_not_noisy_session_history()
     assert draft["golden_response"]["step_count"] == 4
     assert draft["golden_response"]["final_status_code"] == 200
 
+def test_build_test_case_draft_makes_payment_flow_self_contained() -> None:
+    journey = {
+        **_journey(),
+        "steps": [
+            {"order": 1, "action_type": "search_product"},
+            {"order": 2, "action_type": "add_to_cart"},
+            {"order": 3, "action_type": "login"},
+            {"order": 4, "action_type": "checkout"},
+            {"order": 5, "action_type": "payment_success"},
+            {"order": 6, "action_type": "view_order"},
+        ],
+    }
+    checkout_body = {
+        "checkout_ready": True,
+        "cart": {
+            "cart_id": "cart-1",
+            "user_id": "user-1",
+            "voucher_code": None,
+            "items": [
+                {
+                    "cart_item_id": "cart-item-1",
+                    "product_id": "product-1",
+                    "name": "Dell Inspiron 15",
+                    "brand": "Dell",
+                    "price": 15000000,
+                    "stock": 12,
+                    "quantity": 1,
+                    "line_total": 15000000,
+                }
+            ],
+            "subtotal_amount": 15000000,
+            "discount_amount": 0,
+            "total_amount": 15000000,
+        },
+        "subtotal_amount": 15000000,
+        "discount_amount": 0,
+        "total_amount": 15000000,
+        "shipping_address": "456 Browse Avenue",
+    }
+    logs = [
+        _log("GET", "/api/products", 200, {}, {"result_count": 7}, "search_product"),
+        _log("POST", "/api/cart/items", 401, {"product_id": "product-1", "quantity": 1}, {"message": "Missing bearer token"}, "add_to_cart"),
+        _log("POST", "/api/auth/login", 200, {"email": "browser_user@example.com"}, {"accessToken": "token", "user": {"name": "Product Browser"}}, "login"),
+        _log("POST", "/api/checkout", 200, {}, checkout_body, "checkout"),
+        _log("POST", "/api/payments/simulate-success", 200, {"order_id": "old-order-id"}, {"payment_status": "SUCCESS"}, "payment_success"),
+        _log("GET", "/api/orders/:id", 200, {}, {"order_status": "PAID"}, "view_order"),
+    ]
+
+    draft = service._build_test_case_draft(journey, logs)
+
+    action_types = [step["action_type"] for step in draft["steps"]]
+    assert action_types == [
+        "search_product",
+        "add_to_cart",
+        "login",
+        "add_to_cart",
+        "checkout",
+        "checkout",
+        "payment_success",
+        "view_order",
+    ]
+    generated_add_to_cart = draft["steps"][3]
+    assert generated_add_to_cart["expected_status"] == 201
+    assert generated_add_to_cart["request_payload"] == {"product_id": "product-1", "quantity": 1}
+    create_order = draft["steps"][5]
+    assert create_order["endpoint"] == "/api/orders"
+    assert create_order["expected_status"] == 201
+    assert create_order["extract"] == {"order_id": "response.body.order_id"}
+    payment = draft["steps"][6]
+    assert payment["uses"] == {"order_id": "request.body"}
+    assert draft["steps"][7]["endpoint"] == "/api/orders/:id"
+    assert draft["steps"][7]["uses"] == {"order_id": "path"}
+
 def test_build_test_case_draft_preserves_get_query_filters() -> None:
     log = _log(
         "GET",

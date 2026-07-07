@@ -203,14 +203,24 @@ def import_shoplite_logs_from_jsonl() -> dict[str, Any]:
     }
 
 def clear_database() -> dict[str, Any]:
-    elasticsearch = elasticsearch_client.clear_index(settings.demo_log_index)
+    elasticsearch = elasticsearch_client.clear_index(settings.demo_log_index) if settings.elasticsearch_url else None
+    shoplite = _clear_shoplite_request_logs() if not settings.elasticsearch_url and settings.shoplite_database_url else None
     with connection.connect() as conn:
         with conn.cursor() as cur:
             deleted = _fetch_table_counts(cur, LOGITEST_DATA_TABLES)
             cur.execute(f"TRUNCATE TABLE {', '.join(LOGITEST_DATA_TABLES)} RESTART IDENTITY CASCADE")
             conn.commit()
 
-    return {"cleared": True, "deleted": deleted, "elasticsearch": elasticsearch}
+    return {"cleared": True, "deleted": deleted, "elasticsearch": elasticsearch, "shoplite": shoplite}
+
+def _clear_shoplite_request_logs() -> dict[str, Any]:
+    with psycopg.connect(settings.shoplite_database_url) as conn:
+        with conn.cursor() as cur:
+            deleted = _fetch_table_counts(cur, ("request_logs",))
+            cur.execute("TRUNCATE TABLE request_logs RESTART IDENTITY")
+            conn.commit()
+
+    return {"deleted": deleted}
 
 def list_logs(*, limit: int, offset: int, filters: LogFilters) -> dict[str, Any]:
     where_sql, where_params = _build_log_filters(filters)
@@ -574,6 +584,7 @@ def _normalize_shoplite_db_log(row: dict[str, Any], *, index: str) -> dict[str, 
         "source_index": index,
         "raw_log": {
             **masked_row,
+            "timestamp": timestamp,
             "_shoplite": {
                 "database": "shoplite",
                 "table": "request_logs",

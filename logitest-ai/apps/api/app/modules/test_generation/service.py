@@ -343,7 +343,129 @@ def _build_steps(logs: list[dict[str, Any]], journey_steps: list[dict[str, Any]]
         }
         step.update(metadata_by_order.get(order, {}))
         steps.append(step)
-    return steps
+    return _make_steps_self_contained(steps)
+
+def _make_steps_self_contained(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    steps = [dict(step) for step in steps]
+    checkout_index = _first_checkout_preview_index(steps)
+    if checkout_index is not None and not _has_successful_add_to_cart_before(steps, checkout_index):
+        steps.insert(checkout_index, _synthetic_add_to_cart_step(steps[checkout_index]))
+        checkout_index += 1
+
+    payment_index = _first_payment_index(steps)
+    if payment_index is not None and checkout_index is not None and not _has_order_creation_before(steps, payment_index):
+        checkout = steps[checkout_index] if checkout_index is not None else {}
+        steps.insert(payment_index, _synthetic_create_order_step(checkout))
+
+    _wire_order_id_uses(steps)
+    return _renumber_steps(steps)
+
+def _first_checkout_preview_index(steps: list[dict[str, Any]]) -> int | None:
+    for index, step in enumerate(steps):
+        if step.get("endpoint") == "/api/checkout" and _is_success_status(step.get("expected_status")):
+            return index
+    return None
+
+def _first_payment_index(steps: list[dict[str, Any]]) -> int | None:
+    for index, step in enumerate(steps):
+        if str(step.get("endpoint") or "").startswith("/api/payments/"):
+            return index
+    return None
+
+def _has_successful_add_to_cart_before(steps: list[dict[str, Any]], end: int) -> bool:
+    return any(
+        step.get("action_type") == "add_to_cart" and _is_success_status(step.get("expected_status"))
+        for step in steps[:end]
+    )
+
+def _has_order_creation_before(steps: list[dict[str, Any]], end: int) -> bool:
+    return any(
+        step.get("method") == "POST" and step.get("endpoint") == "/api/orders" and _is_success_status(step.get("expected_status"))
+        for step in steps[:end]
+    )
+
+def _synthetic_add_to_cart_step(checkout_step: dict[str, Any]) -> dict[str, Any]:
+    cart = checkout_step.get("golden_response", {}).get("cart", {}) if isinstance(checkout_step.get("golden_response"), dict) else {}
+    item = (cart.get("items") or [{}])[0] if isinstance(cart, dict) else {}
+    product_id = item.get("product_id")
+    quantity = item.get("quantity") or 1
+    golden_response = {
+        "product_id": product_id,
+        "cart": cart,
+    }
+    if item.get("cart_item_id"):
+        golden_response["cart_item_id"] = item["cart_item_id"]
+
+    return {
+        "action_type": "add_to_cart",
+        "service_name": checkout_step.get("service_name"),
+        "method": "POST",
+        "endpoint": "/api/cart/items",
+        "request_payload": {"product_id": product_id, "quantity": quantity},
+        "expected_status": 201,
+        "golden_response": golden_response,
+        "response_time_ms": checkout_step.get("response_time_ms"),
+    }
+
+def _synthetic_create_order_step(checkout_step: dict[str, Any]) -> dict[str, Any]:
+    checkout_body = checkout_step.get("golden_response") if isinstance(checkout_step.get("golden_response"), dict) else {}
+    cart = checkout_body.get("cart", {}) if isinstance(checkout_body.get("cart"), dict) else {}
+    items = [
+        {
+            "order_item_id": item.get("cart_item_id"),
+            "product_id": item.get("product_id"),
+            "name": item.get("name"),
+            "quantity": item.get("quantity"),
+            "unit_price": item.get("price"),
+            "line_total": item.get("line_total"),
+        }
+        for item in cart.get("items", [])
+        if isinstance(item, dict)
+    ]
+
+    return {
+        "action_type": "checkout",
+        "service_name": checkout_step.get("service_name"),
+        "method": "POST",
+        "endpoint": "/api/orders",
+        "request_payload": {"shipping_address": checkout_body.get("shipping_address")},
+        "expected_status": 201,
+        "golden_response": {
+            "order_id": "generated_order_id",
+            "order_status": "PENDING_PAYMENT",
+            "payment_status": "PENDING",
+            "subtotal_amount": checkout_body.get("subtotal_amount"),
+            "discount_amount": checkout_body.get("discount_amount"),
+            "total_amount": checkout_body.get("total_amount"),
+            "voucher_code": cart.get("voucher_code"),
+            "shipping_address": checkout_body.get("shipping_address"),
+            "items": items,
+        },
+        "response_time_ms": checkout_step.get("response_time_ms"),
+        "extract": {"order_id": "response.body.order_id"},
+    }
+
+def _wire_order_id_uses(steps: list[dict[str, Any]]) -> None:
+    has_order_id = any("order_id" in (step.get("extract") or {}) for step in steps)
+    if not has_order_id:
+        return
+    for step in steps:
+        endpoint = str(step.get("endpoint") or "")
+        if endpoint.startswith("/api/payments/") and "order_id" in (step.get("request_payload") or {}):
+            step.setdefault("uses", {})["order_id"] = "request.body"
+        if endpoint.startswith("/api/orders/"):
+            step["endpoint"] = "/api/orders/:id"
+            step.setdefault("uses", {})["order_id"] = "path"
+
+def _renumber_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{**step, "order": index + 1} for index, step in enumerate(steps)]
+
+def _is_success_status(status: Any) -> bool:
+    try:
+        value = int(status)
+    except (TypeError, ValueError):
+        return False
+    return 200 <= value < 300
 
 def _replay_logs_for_journey(logs: list[dict[str, Any]], journey_steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     wanted = [str(step.get("action_type")) for step in journey_steps if step.get("action_type")]
