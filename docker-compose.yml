@@ -43,6 +43,8 @@ services:
       dockerfile: Dockerfile
     container_name: logitest-shoplite-app
     restart: unless-stopped
+    env_file:
+      - ./logitest-ai/.env
     environment:
       LOGITEST_DATABASE_URL: postgresql://logitest:logitest@postgres:5432/logitest_ai
       SHOPLITE_DATABASE_URL: postgresql://shoplite:shoplite@postgres:5432/shoplite?schema=public

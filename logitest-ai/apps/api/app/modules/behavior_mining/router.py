@@ -5,6 +5,7 @@ from app.modules.behavior_mining import service
 from app.modules.behavior_mining.schemas import (
     AnalyzeBehaviorResponse,
     JourneyFilters,
+    JourneyListItem,
     JourneyListResponse,
     PersonaFilters,
     PersonaListResponse,
@@ -45,6 +46,22 @@ def list_journeys(
             detail="Database is unavailable.",
         ) from exc
 
+
+@router.get("/journeys/{journey_id}", response_model=JourneyListItem)
+def get_journey(journey_id: str) -> dict[str, object]:
+    try:
+        journey = service.get_journey(journey_id)
+        if not journey:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Journey not found.",
+            )
+        return journey
+    except psycopg.OperationalError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is unavailable.",
+        ) from exc
 
 @router.get("/personas", response_model=PersonaListResponse)
 def list_personas(

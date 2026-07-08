@@ -1,0 +1,45 @@
+{
+  "users": [
+    {
+      "email": "normal_buyer@example.com",
+      "password": "Password123"
+    },
+    {
+      "email": "browser_user@example.com",
+      "password": "Password123"
+    },
+    {
+      "email": "hesitant_buyer@example.com",
+      "password": "Password123"
+    },
+    {
+      "email": "voucher_hunter@example.com",
+      "password": "Password123"
+    },
+    {
+      "email": "error_case_user@example.com",
+      "password": "Password123"
+    }
+  ],
+  "admin": {
+    "email": "admin@example.com",
+    "password": "Password123"
+  },
+  "keywords": ["iphone", "dell", "keyboard", "mouse", "sneaker"],
+  "addresses": [
+    "synthetic_12 Traffic Street",
+    "synthetic_34 Demo Avenue",
+    "synthetic_56 Checkout Road"
+  ],
+  "quantities": {
+    "valid": [1, 2]
+  },
+  "syntheticProduct": {
+    "namePrefix": "synthetic_traffic_product",
+    "brand": "TrafficLab",
+    "category": "Synthetic",
+    "description": "Synthetic product created by traffic generator.",
+    "price": 99000,
+    "stock": 10000
+  }
+}

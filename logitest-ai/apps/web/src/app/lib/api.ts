@@ -425,6 +425,7 @@ export const api = {
   analyzeJourneys: () => request<AnalyzeResponse>("/api/behavior/analyze", { method: "POST" }),
   listJourneys: (page: PageQuery) =>
     request<ListResponse<JourneyItem>>("/api/behavior/journeys", { query: page }),
+  getJourney: (journeyId: string) => request<JourneyItem>(`/api/behavior/journeys/${journeyId}`),
   generateTest: (journeyId: string) =>
     request<GenerateResponse>("/api/test-generation/generate", {
       method: "POST",

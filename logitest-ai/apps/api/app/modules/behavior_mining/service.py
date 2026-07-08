@@ -168,11 +168,36 @@ def list_journeys(*, limit: int, offset: int, filters: JourneyFilters) -> dict[s
             rows = cur.fetchall()
 
     return {
-        "items": [_serialize_journey_row(row) for row in rows],
+        "items": [_serialize_journey_row(row, use_ai=False) for row in rows],
         "limit": limit,
         "offset": offset,
         "total": total,
     }
+
+def get_journey(journey_id: str) -> dict[str, Any] | None:
+    sql = """
+        SELECT
+            journeys.id,
+            journeys.persona_id,
+            personas.name AS persona_name,
+            journeys.name,
+            journeys.description,
+            journeys.source_session_count,
+            journeys.frequency_score,
+            journeys.risk_score,
+            journeys.steps,
+            journeys.example_session_id,
+            journeys.created_at,
+            journeys.updated_at
+        FROM journeys
+        LEFT JOIN personas ON personas.id = journeys.persona_id
+        WHERE journeys.id = %s
+    """
+    with connection.connect() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(sql, (journey_id,))
+            row = cur.fetchone()
+    return _serialize_journey_row(row, use_ai=True) if row else None
 
 
 def _group_rows_by_session(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -485,7 +510,7 @@ def _serialize_persona_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _serialize_journey_row(row: dict[str, Any]) -> dict[str, Any]:
+def _serialize_journey_row(row: dict[str, Any], *, use_ai: bool) -> dict[str, Any]:
     steps = list(row.get("steps") or [])
     return {
         **row,
@@ -495,12 +520,12 @@ def _serialize_journey_row(row: dict[str, Any]) -> dict[str, Any]:
         "frequency_score": _to_float(row.get("frequency_score")),
         "risk_score": _to_float(row.get("risk_score")),
         "steps": steps,
-        "behavior_analysis": _build_behavior_analysis(str(row.get("name") or "Journey"), steps),
+        "behavior_analysis": _build_behavior_analysis(str(row.get("name") or "Journey"), steps, use_ai=use_ai),
     }
 
-def _build_behavior_analysis(name: str, steps: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_behavior_analysis(name: str, steps: list[dict[str, Any]], *, use_ai: bool = True) -> dict[str, Any]:
     safe_steps = _safe_analysis_steps(steps)
-    if gemini_client.gemini_available():
+    if use_ai and gemini_client.gemini_available():
         generated = _cached_gemini_behavior(name, json.dumps(safe_steps, sort_keys=True))
         if generated:
             return {**generated, **gemini_client.metadata(fallback_used=False)}
