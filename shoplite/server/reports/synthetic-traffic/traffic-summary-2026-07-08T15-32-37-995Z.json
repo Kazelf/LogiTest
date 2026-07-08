@@ -1,0 +1,67 @@
+{
+  "total_sessions": 13,
+  "total_requests": 38,
+  "success_requests": 35,
+  "failed_requests": 3,
+  "journey_distribution": {
+    "login_success": 1,
+    "login_failed": 1,
+    "browse_products": 1,
+    "search_product": 1,
+    "search_no_results": 1,
+    "view_product_detail": 1,
+    "add_to_cart": 1,
+    "update_cart_quantity": 1,
+    "remove_cart_item": 1,
+    "checkout_success": 1,
+    "checkout_failed_missing_info": 1,
+    "checkout_failed_invalid_quantity": 1,
+    "view_order_detail": 1
+  },
+  "avg_latency_ms": 68,
+  "p95_latency_ms": 211,
+  "generated_at": "2026-07-08T15:32:37.996Z",
+  "base_url": "http://localhost:4000",
+  "mode": "demo",
+  "list_of_generated_session_id": [
+    "sess_synthetic_20260708T153237_8185b0b6",
+    "sess_synthetic_20260708T153237_b1e360c8",
+    "sess_synthetic_20260708T153237_b8f72d75",
+    "sess_synthetic_20260708T153237_892a0d09",
+    "sess_synthetic_20260708T153237_e789abc6",
+    "sess_synthetic_20260708T153237_f681f532",
+    "sess_synthetic_20260708T153237_4ab772ff",
+    "sess_synthetic_20260708T153237_6d146462",
+    "sess_synthetic_20260708T153237_fa995919",
+    "sess_synthetic_20260708T153237_3b3ab847",
+    "sess_synthetic_20260708T153237_09180565",
+    "sess_synthetic_20260708T153237_4fee8cb9",
+    "sess_synthetic_20260708T153237_78f625dc"
+  ],
+  "errors": [
+    {
+      "session_id": "sess_synthetic_20260708T153237_c4c422be",
+      "journey_type": "admin_create_synthetic_product",
+      "method": "POST",
+      "route": "/api/admin/products",
+      "status": 500,
+      "error": "INTERNAL_SERVER_ERROR"
+    },
+    {
+      "session_id": "sess_synthetic_20260708T153237_5de6bf06",
+      "journey_type": "admin_create_synthetic_product",
+      "method": "POST",
+      "route": "/api/admin/products",
+      "status": 500,
+      "error": "INTERNAL_SERVER_ERROR"
+    },
+    {
+      "session_id": "sess_synthetic_20260708T153237_3b3ab847",
+      "journey_type": "checkout_success",
+      "method": "POST",
+      "route": "/api/orders",
+      "status": 400,
+      "error": "CART_EMPTY"
+    }
+  ]
+}

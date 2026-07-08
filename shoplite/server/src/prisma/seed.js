@@ -98,6 +98,16 @@ async function seedDatabase() {
   console.log("ShopLite seed data created.");
 }
 
+async function resetDemoData() {
+  await prisma.inventoryTransaction.deleteMany();
+  await prisma.payment.deleteMany();
+  await prisma.orderItem.deleteMany();
+  await prisma.order.deleteMany();
+  await prisma.cartItem.deleteMany();
+  await prisma.cart.deleteMany();
+  await seedDatabase();
+}
+
 if (require.main === module) {
   seedDatabase()
     .catch((error) => {
@@ -109,4 +119,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { seedDatabase, demoPassword };
+module.exports = { seedDatabase, resetDemoData, demoPassword };

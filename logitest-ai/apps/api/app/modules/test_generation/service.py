@@ -20,33 +20,44 @@ DYNAMIC_RESPONSE_KEYS = {
     "cart_id",
     "cartItemId",
     "cart_item_id",
+    "count",
     "createdAt",
     "created_at",
+    "discount_amount",
     "id",
+    "line_total",
     "orderId",
     "order_id",
     "orderItemId",
     "order_item_id",
+    "orders",
     "paymentId",
     "payment_id",
     "productId",
     "product_id",
+    "quantity",
     "requestId",
     "request_id",
     "refreshToken",
     "removedCartItemId",
     "removed_cart_item_id",
+    "result_count",
     "sessionId",
     "session_id",
+    "stock",
+    "subtotal_amount",
     "timestamp",
     "token",
+    "total_amount",
     "traceId",
     "trace_id",
+    "unit_price",
     "updatedAt",
     "updated_at",
     "userId",
     "user_id",
 }
+AUTH_REQUIRED_ENDPOINT_PREFIXES = ("/api/cart", "/api/checkout", "/api/orders", "/api/payments", "/api/vouchers")
 
 
 class JourneyNotFoundError(Exception):
@@ -347,6 +358,15 @@ def _build_steps(logs: list[dict[str, Any]], journey_steps: list[dict[str, Any]]
 
 def _make_steps_self_contained(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     steps = [dict(step) for step in steps]
+    if _needs_synthetic_login(steps):
+        steps.insert(0, _synthetic_login_step(steps[0]))
+
+    payment_index = _first_payment_index(steps)
+    if payment_index is not None and not _has_order_creation_before(steps, payment_index):
+        if _first_checkout_preview_index(steps) is None:
+            prerequisites = _synthetic_payment_prerequisites(steps[payment_index])
+            steps[payment_index:payment_index] = prerequisites
+
     checkout_index = _first_checkout_preview_index(steps)
     if checkout_index is not None and not _has_successful_add_to_cart_before(steps, checkout_index):
         steps.insert(checkout_index, _synthetic_add_to_cart_step(steps[checkout_index]))
@@ -383,6 +403,69 @@ def _has_order_creation_before(steps: list[dict[str, Any]], end: int) -> bool:
         step.get("method") == "POST" and step.get("endpoint") == "/api/orders" and _is_success_status(step.get("expected_status"))
         for step in steps[:end]
     )
+
+def _needs_synthetic_login(steps: list[dict[str, Any]]) -> bool:
+    if any(step.get("action_type") == "login" and _is_success_status(step.get("expected_status")) for step in steps):
+        return False
+    first_auth_index = next((index for index, step in enumerate(steps) if _requires_auth(step)), None)
+    if first_auth_index is None:
+        return False
+    return "authorization" in (steps[first_auth_index].get("request_payload") or {})
+
+def _requires_auth(step: dict[str, Any]) -> bool:
+    endpoint = str(step.get("endpoint") or "")
+    return any(endpoint.startswith(prefix) for prefix in AUTH_REQUIRED_ENDPOINT_PREFIXES)
+
+def _synthetic_login_step(source_step: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "action_type": "login",
+        "service_name": source_step.get("service_name"),
+        "method": "POST",
+        "endpoint": "/api/auth/login",
+        "request_payload": {"email": "normal_buyer@example.com", "password": "Password123"},
+        "expected_status": 200,
+        "golden_response": {
+            "accessToken": "***MASKED***",
+            "user": {"name": "Normal Buyer", "role": "BUYER", "email": "***MASKED***"},
+        },
+        "response_time_ms": source_step.get("response_time_ms"),
+    }
+
+def _synthetic_payment_prerequisites(payment_step: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "action_type": "search_product",
+            "service_name": payment_step.get("service_name"),
+            "method": "GET",
+            "endpoint": "/api/products",
+            "request_payload": {},
+            "expected_status": 200,
+            "golden_response": {"count": 1},
+            "response_time_ms": payment_step.get("response_time_ms"),
+            "extract": {"product_id": "response.body.products[0].product_id"},
+        },
+        {
+            "action_type": "add_to_cart",
+            "service_name": payment_step.get("service_name"),
+            "method": "POST",
+            "endpoint": "/api/cart/items",
+            "request_payload": {"product_id": "generated_product_id", "quantity": 1},
+            "expected_status": 201,
+            "golden_response": {"cart": {}, "product_id": "generated_product_id"},
+            "response_time_ms": payment_step.get("response_time_ms"),
+            "uses": {"product_id": "request.body"},
+        },
+        {
+            "action_type": "checkout",
+            "service_name": payment_step.get("service_name"),
+            "method": "POST",
+            "endpoint": "/api/checkout",
+            "request_payload": {"shipping_address": "Demo Address"},
+            "expected_status": 200,
+            "golden_response": {"cart": {}, "checkout_ready": True, "shipping_address": "Demo Address"},
+            "response_time_ms": payment_step.get("response_time_ms"),
+        },
+    ]
 
 def _synthetic_add_to_cart_step(checkout_step: dict[str, Any]) -> dict[str, Any]:
     cart = checkout_step.get("golden_response", {}).get("cart", {}) if isinstance(checkout_step.get("golden_response"), dict) else {}
@@ -423,6 +506,19 @@ def _synthetic_create_order_step(checkout_step: dict[str, Any]) -> dict[str, Any
         if isinstance(item, dict)
     ]
 
+    golden_response = {
+        "order_id": "generated_order_id",
+        "order_status": "PENDING_PAYMENT",
+        "payment_status": "PENDING",
+        "subtotal_amount": checkout_body.get("subtotal_amount"),
+        "discount_amount": checkout_body.get("discount_amount"),
+        "total_amount": checkout_body.get("total_amount"),
+        "voucher_code": cart.get("voucher_code"),
+        "shipping_address": checkout_body.get("shipping_address"),
+    }
+    if items:
+        golden_response["items"] = items
+
     return {
         "action_type": "checkout",
         "service_name": checkout_step.get("service_name"),
@@ -430,17 +526,7 @@ def _synthetic_create_order_step(checkout_step: dict[str, Any]) -> dict[str, Any
         "endpoint": "/api/orders",
         "request_payload": {"shipping_address": checkout_body.get("shipping_address")},
         "expected_status": 201,
-        "golden_response": {
-            "order_id": "generated_order_id",
-            "order_status": "PENDING_PAYMENT",
-            "payment_status": "PENDING",
-            "subtotal_amount": checkout_body.get("subtotal_amount"),
-            "discount_amount": checkout_body.get("discount_amount"),
-            "total_amount": checkout_body.get("total_amount"),
-            "voucher_code": cart.get("voucher_code"),
-            "shipping_address": checkout_body.get("shipping_address"),
-            "items": items,
-        },
+        "golden_response": golden_response,
         "response_time_ms": checkout_step.get("response_time_ms"),
         "extract": {"order_id": "response.body.order_id"},
     }
@@ -484,7 +570,21 @@ def _replay_logs_for_journey(logs: list[dict[str, Any]], journey_steps: list[dic
             selected.append(row)
             search_from = index + 1
             break
+    if selected and not any((row.get("action_type") or "unknown") == "login" for row in selected):
+        login = _successful_login_row(logs)
+        if login and any(_requires_auth(row) or "authorization" in (row.get("request_payload") or {}) for row in selected):
+            selected.insert(0, login)
     return selected or logs
+
+def _successful_login_row(logs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    return next(
+        (
+            row
+            for row in logs
+            if (row.get("action_type") or "unknown") == "login" and _is_success_status(row.get("status_code"))
+        ),
+        None,
+    )
 
 def _concrete_endpoint(row: dict[str, Any]) -> str | None:
     endpoint = row.get("endpoint")

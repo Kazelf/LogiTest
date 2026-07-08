@@ -1,0 +1,59 @@
+{
+  "total_sessions": 13,
+  "total_requests": 39,
+  "success_requests": 37,
+  "failed_requests": 2,
+  "journey_distribution": {
+    "login_success": 1,
+    "login_failed": 1,
+    "browse_products": 1,
+    "search_product": 1,
+    "search_no_results": 1,
+    "view_product_detail": 1,
+    "add_to_cart": 1,
+    "update_cart_quantity": 1,
+    "remove_cart_item": 1,
+    "checkout_success": 1,
+    "checkout_failed_missing_info": 1,
+    "checkout_failed_invalid_quantity": 1,
+    "view_order_detail": 1
+  },
+  "avg_latency_ms": 56,
+  "p95_latency_ms": 177,
+  "generated_at": "2026-07-08T15:33:13.653Z",
+  "base_url": "http://localhost:4000",
+  "mode": "demo",
+  "list_of_generated_session_id": [
+    "sess_synthetic_20260708T153313_1aa3102c",
+    "sess_synthetic_20260708T153313_332913ee",
+    "sess_synthetic_20260708T153313_13aeac26",
+    "sess_synthetic_20260708T153313_6a36ca20",
+    "sess_synthetic_20260708T153313_1541635e",
+    "sess_synthetic_20260708T153313_468837e9",
+    "sess_synthetic_20260708T153313_4d9f0034",
+    "sess_synthetic_20260708T153313_2b23bfcd",
+    "sess_synthetic_20260708T153313_0bbc19f1",
+    "sess_synthetic_20260708T153313_2a6bfc6b",
+    "sess_synthetic_20260708T153313_4a6c43f0",
+    "sess_synthetic_20260708T153313_28d5ee01",
+    "sess_synthetic_20260708T153313_ec768226"
+  ],
+  "errors": [
+    {
+      "session_id": "sess_synthetic_20260708T153313_219f09c3",
+      "journey_type": "admin_create_synthetic_product",
+      "method": "POST",
+      "route": "/api/admin/products",
+      "status": 500,
+      "error": "INTERNAL_SERVER_ERROR"
+    },
+    {
+      "session_id": "sess_synthetic_20260708T153313_d6b3a901",
+      "journey_type": "admin_create_synthetic_product",
+      "method": "POST",
+      "route": "/api/admin/products",
+      "status": 500,
+      "error": "INTERNAL_SERVER_ERROR"
+    }
+  ]
+}

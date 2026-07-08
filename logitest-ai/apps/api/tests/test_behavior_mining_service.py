@@ -81,7 +81,8 @@ def test_serialize_rows_normalizes_ids_json_and_decimals() -> None:
             "example_session_id": None,
             "created_at": "created",
             "updated_at": "updated",
-        }
+        },
+        use_ai=False,
     )
 
     assert persona["id"] == "persona-id"
@@ -90,6 +91,36 @@ def test_serialize_rows_normalizes_ids_json_and_decimals() -> None:
     assert journey["frequency_score"] == 0.3333
     assert journey["risk_score"] == 0.25
     assert journey["steps"] == []
+    assert journey["behavior_analysis"]["ai_provider"] == "rule_based"
+    assert journey["behavior_analysis"]["fallback_used"] is True
+
+def test_serialize_journey_row_can_skip_gemini_for_lists(monkeypatch) -> None:
+    service._cached_gemini_behavior.cache_clear()
+    monkeypatch.setattr(service.gemini_client, "gemini_available", lambda: True)
+    monkeypatch.setattr(
+        service.gemini_client,
+        "generate_behavior_explanation",
+        lambda name, steps: (_ for _ in ()).throw(AssertionError("Gemini should not run for list rows")),
+    )
+
+    journey = service._serialize_journey_row(
+        {
+            "id": "journey-id",
+            "persona_id": None,
+            "persona_name": None,
+            "name": "Journey: unknown",
+            "description": None,
+            "source_session_count": 1,
+            "frequency_score": Decimal("0.3333"),
+            "risk_score": Decimal("0.2500"),
+            "steps": [{"order": 1, "action_type": "login"}],
+            "example_session_id": None,
+            "created_at": "created",
+            "updated_at": "updated",
+        },
+        use_ai=False,
+    )
+
     assert journey["behavior_analysis"]["ai_provider"] == "rule_based"
     assert journey["behavior_analysis"]["fallback_used"] is True
 

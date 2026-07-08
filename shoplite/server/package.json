@@ -10,6 +10,9 @@
     "prisma:migrate": "prisma migrate dev --schema src/prisma/schema.prisma",
     "prisma:deploy": "prisma migrate deploy --schema src/prisma/schema.prisma",
     "seed": "node src/prisma/seed.js",
+    "traffic:smoke": "node ../../scripts/traffic-generator/index.js --mode smoke",
+    "traffic:demo": "node ../../scripts/traffic-generator/index.js --mode demo",
+    "traffic:load": "node ../../scripts/traffic-generator/index.js --mode load",
     "test": "jest --runInBand",
     "test:regression": "cross-env ENABLE_PAYMENT_REGRESSION_BUG=true jest --runInBand tests/order-payment.test.js"
   },

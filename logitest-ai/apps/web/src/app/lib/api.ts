@@ -66,6 +66,188 @@ export type ClearDatabaseResponse = {
   elasticsearch?: Record<string, unknown> | null;
 };
 
+export type DemoSnapshot = {
+  mode: string;
+  source: string;
+  summary: {
+    logs: number;
+    sessions: number;
+    journeys: number;
+    generated_tests: number;
+    runs: number;
+    passed: number;
+    failed: number;
+    regression_caught: string;
+  };
+  pipeline: Array<{ label: string; status: string; detail: string }>;
+  journeys: Array<{
+    name: string;
+    persona: string;
+    support: number;
+    confidence: number;
+    risk: string;
+    sessions: string[];
+    endpoints: string[];
+    status: string;
+  }>;
+  oracle: {
+    assert: string[];
+    ignore: string[];
+    threshold: string;
+  };
+  provenance: Record<string, string>;
+  regression: Record<string, string>;
+  evaluation: Record<string, string | number>;
+  mvp: string[];
+  production: string[];
+};
+
+export const DEMO_SNAPSHOT_FALLBACK: DemoSnapshot = {
+  mode: "Demo Snapshot",
+  source: "Frontend fallback, no database writes",
+  summary: {
+    logs: 250,
+    sessions: 18,
+    journeys: 7,
+    generated_tests: 7,
+    runs: 7,
+    passed: 6,
+    failed: 1,
+    regression_caught: "Payment status mismatch",
+  },
+  pipeline: [
+    { label: "Import Logs", status: "completed", detail: "250 ShopLite API logs" },
+    { label: "Normalize & Mask", status: "completed", detail: "PII-safe request/response fields" },
+    { label: "Detect Journeys", status: "completed", detail: "7 mined behavior flows" },
+    { label: "Score Risk/Confidence", status: "completed", detail: "MVP rules + session support" },
+    { label: "Generate Test Cases", status: "completed", detail: "7 API regression cases" },
+    { label: "Generate Jest/Supertest", status: "completed", detail: "Runnable framework artifacts" },
+    { label: "Run on Staging/UAT", status: "failed", detail: "1 deterministic assertion failed" },
+    { label: "Build Regression Report", status: "completed", detail: "Payment mismatch explained" },
+  ],
+  journeys: [
+    {
+      name: "Guest product browsing",
+      persona: "Guest shopper",
+      support: 6,
+      confidence: 0.8,
+      risk: "Low",
+      sessions: ["sess-demo-001", "sess-demo-004"],
+      endpoints: ["GET /api/products", "GET /api/products/:id"],
+      status: "reviewed",
+    },
+    {
+      name: "Search/filter product",
+      persona: "Intent shopper",
+      support: 4,
+      confidence: 0.7,
+      risk: "Medium",
+      sessions: ["sess-demo-002", "sess-demo-006"],
+      endpoints: ["GET /api/products?search=", "GET /api/products?category="],
+      status: "reviewed",
+    },
+    {
+      name: "Add to cart",
+      persona: "Buyer",
+      support: 5,
+      confidence: 0.75,
+      risk: "Medium",
+      sessions: ["sess-demo-003", "sess-demo-007"],
+      endpoints: ["POST /api/cart/items", "GET /api/cart"],
+      status: "approved",
+    },
+    {
+      name: "Checkout success",
+      persona: "Buyer",
+      support: 3,
+      confidence: 0.65,
+      risk: "High",
+      sessions: ["sess-demo-008"],
+      endpoints: ["POST /api/orders", "POST /api/payments"],
+      status: "approved",
+    },
+    {
+      name: "Payment regression",
+      persona: "Buyer",
+      support: 2,
+      confidence: 0.6,
+      risk: "High",
+      sessions: ["sess-demo-009"],
+      endpoints: ["POST /api/payments", "GET /api/orders/:id"],
+      status: "draft",
+    },
+    {
+      name: "Cart validation failure",
+      persona: "Buyer",
+      support: 2,
+      confidence: 0.6,
+      risk: "Medium",
+      sessions: ["sess-demo-010"],
+      endpoints: ["POST /api/cart/items"],
+      status: "reviewed",
+    },
+    {
+      name: "Admin cancel order",
+      persona: "Admin",
+      support: 1,
+      confidence: 0.55,
+      risk: "High",
+      sessions: ["sess-demo-011"],
+      endpoints: ["PATCH /api/admin/orders/:id/cancel"],
+      status: "draft",
+    },
+  ],
+  oracle: {
+    assert: ["status_code", "order_status", "payment_status", "total_amount", "items.length"],
+    ignore: ["id", "createdAt", "updatedAt", "token", "trace_id", "request_id"],
+    threshold: "p95 response time <= 800 ms",
+  },
+  provenance: {
+    session_id: "sess-demo-009",
+    journey_id: "journey-payment-regression",
+    test_case_id: "tc-payment-status",
+    artifact_id: "artifact-jest-supertest-payment",
+    run_id: "run-demo-007",
+    report: "report-payment-status-mismatch",
+  },
+  regression: {
+    status: "failed",
+    failed_assertion: "payment_status",
+    expected: "paid",
+    actual: "pending",
+    diff: "payment_status: paid -> pending",
+    severity: "High",
+    suspected_cause: "Payment service did not persist final status after checkout.",
+    related_journey: "Payment regression",
+    related_trace: "trace-demo-pay-007",
+    framework: "Jest/Supertest",
+  },
+  evaluation: {
+    journey_detection_precision: "6/7 reviewer accepted",
+    runnable_scripts: "7/8 generated scripts ran successfully",
+    regression_detection: "4/5 fault scenarios caught",
+    false_positives: 1,
+    average_review_time: "3.5 min/test",
+  },
+  mvp: [
+    "Express e-commerce modular monolith",
+    "Elasticsearch local / JSONL logs",
+    "Rule-based journey detection + Gemini assist",
+    "Jest/Supertest API tests",
+    "Manual/batch runner",
+    "Basic pass/fail report",
+  ],
+  production: [
+    "Distributed services, queue, scalable workers",
+    "Process mining / sequence mining / clustering",
+    "Approval workflow and audit logs",
+    "CI/CD integration",
+    "Async/callback testing",
+    "RBAC, retention policy, secret manager",
+    "Trend dashboard and failure clustering",
+  ],
+};
+
 export type LogItem = {
   id: string;
   external_log_id: string | null;
@@ -225,6 +407,8 @@ export type PageQuery = {
 };
 
 export const api = {
+  getDemoSnapshot: () => request<DemoSnapshot>("/api/demo/snapshot"),
+  importMockLogs: () => request<ImportResponse>("/api/logs/import-mock", { method: "POST" }),
   importElasticsearchLogs: (options: { newOnly?: boolean; limit?: number | null } = {}) =>
     request<ImportResponse>("/api/logs/import-elasticsearch", {
       method: "POST",
@@ -241,6 +425,7 @@ export const api = {
   analyzeJourneys: () => request<AnalyzeResponse>("/api/behavior/analyze", { method: "POST" }),
   listJourneys: (page: PageQuery) =>
     request<ListResponse<JourneyItem>>("/api/behavior/journeys", { query: page }),
+  getJourney: (journeyId: string) => request<JourneyItem>(`/api/behavior/journeys/${journeyId}`),
   generateTest: (journeyId: string) =>
     request<GenerateResponse>("/api/test-generation/generate", {
       method: "POST",

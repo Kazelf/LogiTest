@@ -90,6 +90,42 @@ def test_list_journeys_returns_paginated_items(monkeypatch) -> None:
     assert response.json() == expected
 
 
+def test_get_journey_returns_item(monkeypatch) -> None:
+    expected = {
+        "id": "journey-id",
+        "persona_id": "persona-id",
+        "persona_name": "Buyer",
+        "name": "Journey: login > payment_success",
+        "description": "Mined from 1 session(s).",
+        "source_session_count": 1,
+        "frequency_score": 0.3333,
+        "risk_score": 0.62,
+        "steps": [{"order": 1, "action_type": "login"}],
+        "behavior_analysis": {"ai_provider": "gemini", "fallback_used": False},
+        "example_session_id": "session-id",
+        "created_at": "2026-06-24T00:00:00Z",
+        "updated_at": "2026-06-24T00:00:00Z",
+    }
+
+    monkeypatch.setattr(
+        service,
+        "get_journey",
+        lambda journey_id: expected if journey_id == "journey-id" else None,
+    )
+
+    response = client.get("/api/behavior/journeys/journey-id")
+
+    assert response.status_code == 200
+    assert response.json() == expected
+
+def test_get_journey_returns_404(monkeypatch) -> None:
+    monkeypatch.setattr(service, "get_journey", lambda journey_id: None)
+
+    response = client.get("/api/behavior/journeys/missing")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Journey not found."}
+
 def test_list_personas_returns_paginated_items(monkeypatch) -> None:
     expected = {
         "items": [

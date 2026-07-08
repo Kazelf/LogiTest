@@ -33,4 +33,18 @@ describe("demo control token", () => {
 
     expect(response.status).toBe(401);
   });
+
+  test("reset-state clears demo data before reseeding", async () => {
+    const resetDemoData = jest.fn().mockResolvedValue();
+    jest.doMock("../src/prisma/seed", () => ({ resetDemoData }));
+    const { app } = require("../src/app");
+
+    const response = await request(app)
+      .post("/api/demo/reset-state")
+      .set("x-demo-control-token", "demo-secret")
+      .send({});
+
+    expect(response.status).toBe(200);
+    expect(resetDemoData).toHaveBeenCalledTimes(1);
+  });
 });

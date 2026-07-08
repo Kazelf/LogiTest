@@ -61,6 +61,38 @@ The intended defense demo flow is:
 10. Enable ShopLite's regression bug toggle.
 11. Run tests again and show the regression report.
 
+## Demo Evidence Snapshot
+
+The dashboard now has a safe `Load Demo Evidence` button. It calls:
+
+```text
+GET /api/demo/snapshot
+```
+
+The endpoint is deterministic and read-only: it does not write PostgreSQL data, does not require a live ShopLite run, and does not require Elasticsearch. If the API route is unavailable, the frontend uses the same clearly labeled `Demo Snapshot` fallback so a deployed empty database still explains the product.
+
+Use this when defending the report before live traffic exists:
+
+1. Open the LogiTest dashboard.
+2. Click `Load Demo Evidence`.
+3. Review the evidence cards, pipeline timeline, journey intelligence table, golden oracle, provenance chain, regression preview, evaluation metrics, and MVP vs production-ready section.
+4. Use `Run Full Pipeline` whenever live ShopLite + Elasticsearch data is available. That path still uses the real ingestion, mining, generation, execution, and reporting APIs.
+
+Snapshot metrics are labeled demo evidence. Live data comes from PostgreSQL/API totals after imports and runs:
+
+- `Logs`: structured backend requests imported from Elasticsearch/JSONL.
+- `Sessions`: grouped user traces by `session_id` / `trace_id`.
+- `Journeys`: mined behavior sequences with support, confidence, and MVP risk labels.
+- `Generated Tests`: Jest/Supertest API regression cases generated from journeys.
+- `Runs`, `Passed`, `Failed`: execution results against the configured target.
+- `Regression Caught`: latest deterministic golden-oracle mismatch, for example `payment_status`.
+
+Screenshot placeholders for the report:
+
+- `[Dashboard overview screenshot here]`
+- `[Golden oracle and provenance screenshot here]`
+- `[Regression report preview screenshot here]`
+
 ## Quick Start
 
 Use this path for the normal demo. From the repository root, start the combined stack:

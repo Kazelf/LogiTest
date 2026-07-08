@@ -118,6 +118,65 @@ def test_compare_results_ignores_dynamic_item_and_payment_ids() -> None:
 
     assert diff["status"] == "passed"
 
+def test_compare_results_ignores_replay_snapshot_fields_but_keeps_status_oracle() -> None:
+    passed = service._compare_results(
+        [
+            {
+                "order": 1,
+                "expected_status": 200,
+                "golden_response": {
+                    "result_count": 9,
+                    "cart": {
+                        "items": [{"stock": 10, "quantity": 3, "line_total": 300, "product_id": "old-product"}],
+                        "user_id": "old-user",
+                        "subtotal_amount": 300,
+                        "total_amount": 300,
+                    },
+                    "orders": [{"order_status": "PAID"}],
+                },
+            }
+        ],
+        [],
+        [
+            {
+                "order": 1,
+                "status_code": 200,
+                "duration_ms": 30,
+                "response_body": {
+                    "result_count": 11,
+                    "cart": {
+                        "items": [
+                            {"stock": 8, "quantity": 2, "line_total": 200, "product_id": "new-product"},
+                            {"stock": 4, "quantity": 1, "line_total": 100, "product_id": "another-product"},
+                        ],
+                        "user_id": "new-user",
+                        "subtotal_amount": 200,
+                        "total_amount": 200,
+                    },
+                    "orders": [],
+                },
+            }
+        ],
+    )
+    failed = service._compare_results(
+        [{"order": 1, "expected_status": 200, "golden_response": {"payment_status": "SUCCESS"}}],
+        [],
+        [{"order": 1, "status_code": 200, "duration_ms": 30, "response_body": {"payment_status": "PENDING"}}],
+    )
+
+    assert passed["status"] == "passed"
+    assert failed["differences"] == [
+        {
+            "order": 1,
+            "type": "business_field",
+            "path": "$.payment_status",
+            "expected": "SUCCESS",
+            "actual": "PENDING",
+            "severity": "medium",
+            "message": "Business field mismatch.",
+        }
+    ]
+
 def test_replace_request_body_uses_matches_camel_and_snake_keys() -> None:
     replaced = service._replace_request_body_uses(
         {"order_id": "order-old", "nested": {"paymentId": "payment-old"}},

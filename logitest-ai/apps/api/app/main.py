@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.modules.behavior_mining.router import router as behavior_router
+from app.modules.demo.router import router as demo_router
 from app.modules.execution.router import router as execution_router
 from app.modules.ingestion.router import router as logs_router
 from app.modules.reports.router import router as reports_router
@@ -22,6 +23,7 @@ app.add_middleware(
 )
 
 app.include_router(behavior_router)
+app.include_router(demo_router)
 app.include_router(execution_router)
 app.include_router(logs_router)
 app.include_router(reports_router)
