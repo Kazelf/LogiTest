@@ -570,7 +570,21 @@ def _replay_logs_for_journey(logs: list[dict[str, Any]], journey_steps: list[dic
             selected.append(row)
             search_from = index + 1
             break
+    if selected and not any((row.get("action_type") or "unknown") == "login" for row in selected):
+        login = _successful_login_row(logs)
+        if login and any(_requires_auth(row) or "authorization" in (row.get("request_payload") or {}) for row in selected):
+            selected.insert(0, login)
     return selected or logs
+
+def _successful_login_row(logs: list[dict[str, Any]]) -> dict[str, Any] | None:
+    return next(
+        (
+            row
+            for row in logs
+            if (row.get("action_type") or "unknown") == "login" and _is_success_status(row.get("status_code"))
+        ),
+        None,
+    )
 
 def _concrete_endpoint(row: dict[str, Any]) -> str | None:
     endpoint = row.get("endpoint")

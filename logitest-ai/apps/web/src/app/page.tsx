@@ -913,7 +913,7 @@ export default function Home() {
             <ProvenancePanel evidence={evidence} />
           </section>
           <section
-            className={`grid gap-4 xl:grid-cols-[1.1fr_0.9fr] ${activeView === "Regression" ? "" : "hidden"}`}
+            className={activeView === "Regression" ? "" : "hidden"}
           >
             <RegressionPreview evidence={evidence} />
           </section>
@@ -1355,6 +1355,7 @@ function ProvenancePanel({ evidence }: { evidence: DemoSnapshot }) {
 
 function RegressionPreview({ evidence }: { evidence: DemoSnapshot }) {
   const r = evidence.regression;
+  const diffs = readableReportDiffs(r.diff);
   return (
     <Panel
       title="Regression Report Preview"
@@ -1374,19 +1375,88 @@ function RegressionPreview({ evidence }: { evidence: DemoSnapshot }) {
           <p className="mt-1 text-sm font-semibold">{r.framework ?? "n/a"}</p>
         </div>
       </div>
-      <div className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-        <KeyValue label="Assertion" value={r.failed_assertion ?? "n/a"} />
-        <KeyValue label="Related trace" value={r.related_trace ?? "n/a"} />
-        <KeyValue label="Expected" value={r.expected ?? "n/a"} />
-        <KeyValue label="Actual" value={r.actual ?? "n/a"} />
-        <KeyValue label="Journey" value={r.related_journey ?? "n/a"} />
-        <KeyValue label="Cause" value={r.suspected_cause ?? "n/a"} />
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.3fr]">
+        <div className="border border-slate-200 bg-white p-3">
+          <h3 className="mb-3 text-sm font-semibold">What changed</h3>
+          <KeyValue label="Assertion" value={r.failed_assertion ?? "n/a"} />
+          <KeyValue label="Expected" value={readableValue(r.expected)} />
+          <KeyValue label="Actual" value={readableValue(r.actual)} />
+        </div>
+        <div className="border border-slate-200 bg-slate-50 p-3">
+          <h3 className="mb-3 text-sm font-semibold">Why it matters</h3>
+          <KeyValue label="Journey" value={r.related_journey ?? "n/a"} />
+          <KeyValue label="Trace" value={r.related_trace ?? "n/a"} />
+          <KeyValue label="Cause" value={r.suspected_cause ?? "n/a"} />
+        </div>
       </div>
-      <pre className="mt-3 overflow-auto border border-slate-200 bg-slate-950 p-3 text-xs text-slate-100">
-        {r.diff ?? "No diff"}
-      </pre>
+      <div className="mt-4 border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold">
+          Deterministic differences
+        </div>
+        <Table
+          headers={["Field", "Expected", "Actual", "Severity"]}
+          rows={diffs.map((diff) => [
+            <span className="font-mono text-xs" key="field">
+              {diff.field}
+            </span>,
+            diff.expected,
+            diff.actual,
+            <Badge key="severity" value={diff.severity} />,
+          ])}
+        />
+      </div>
     </Panel>
   );
+}
+
+function readableReportDiffs(diff: string | undefined) {
+  if (!diff) {
+    return [
+      {
+        field: "n/a",
+        expected: "No diff",
+        actual: "No diff",
+        severity: "n/a",
+      },
+    ];
+  }
+  try {
+    const parsed = JSON.parse(diff) as { diffs?: Array<Record<string, unknown>> };
+    const diffs = Array.isArray(parsed.diffs) ? parsed.diffs : [];
+    if (diffs.length) {
+      return diffs.map((item) => ({
+        field: String(item.path ?? item.field ?? "response"),
+        expected: readableValue(item.expected),
+        actual: readableValue(item.actual),
+        severity: String(item.severity ?? "medium"),
+      }));
+    }
+  } catch {
+    // Plain text fallback from the demo snapshot.
+  }
+  return [
+    {
+      field: diff.split(":")[0] || "response",
+      expected: diff,
+      actual: "See failed assertion",
+      severity: "high",
+    },
+  ];
+}
+
+function readableValue(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return "n/a";
+  }
+  if (typeof value !== "string") {
+    return typeof value === "object" ? formatJson(value) : String(value);
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return typeof parsed === "string" ? parsed : formatJson(parsed);
+  } catch {
+    return value;
+  }
 }
 
 function EvaluationAndScope({ evidence }: { evidence: DemoSnapshot }) {

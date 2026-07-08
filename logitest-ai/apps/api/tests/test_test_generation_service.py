@@ -335,6 +335,41 @@ def test_build_test_case_draft_makes_payment_only_journey_self_contained() -> No
     assert draft["steps"][4]["extract"] == {"order_id": "response.body.order_id"}
     assert draft["steps"][5]["uses"] == {"order_id": "request.body"}
 
+def test_build_test_case_draft_keeps_session_login_when_early_search_is_304() -> None:
+    journey = {
+        **_journey(),
+        "steps": [
+            {"order": 1, "action_type": "search_product"},
+            {"order": 2, "action_type": "login"},
+            {"order": 3, "action_type": "add_to_cart"},
+        ],
+    }
+    logs = [
+        _log("GET", "/api/products", 304, {"authorization": "***MASKED***"}, {"result_count": 1}, "search_product"),
+        _log(
+            "POST",
+            "/api/auth/login",
+            200,
+            {"email": "***MASKED***", "password": "***MASKED***", "authorization": "***MASKED***"},
+            {"accessToken": "***MASKED***", "user": {"name": "Product Browser", "address": "456 Browse Avenue"}},
+            "login",
+        ),
+        _log("GET", "/api/products", 200, {"authorization": "***MASKED***"}, {"result_count": 1}, "search_product"),
+        _log(
+            "POST",
+            "/api/cart/items",
+            201,
+            {"product_id": "product-1", "quantity": 1, "authorization": "***MASKED***"},
+            {"cart": {}, "product_id": "product-1"},
+            "add_to_cart",
+        ),
+    ]
+
+    draft = service._build_test_case_draft(journey, logs)
+
+    assert [step["action_type"] for step in draft["steps"]] == ["login", "search_product", "add_to_cart"]
+    assert draft["steps"][0]["request_payload"] == {"email": "browser_user@example.com", "password": "Password123"}
+
 def _journey() -> dict:
     return {
         "id": "journey-id",
