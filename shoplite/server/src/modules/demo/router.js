@@ -2,7 +2,7 @@ const express = require("express");
 const { env } = require("../../config/env");
 const { demoRegression, setDemoRegressionBug } = require("../../config/demoRegression");
 const { createHttpError } = require("../../middlewares/errorHandler");
-const { seedDatabase } = require("../../prisma/seed");
+const { resetDemoData } = require("../../prisma/seed");
 
 const router = express.Router();
 
@@ -33,7 +33,7 @@ router.get("/regression-toggle", (req, res) => {
 
 router.post("/reset-state", async (req, res, next) => {
   try {
-    await seedDatabase();
+    await resetDemoData();
     res.json({ demo_only: true, reset: true });
   } catch (error) {
     next(error);
