@@ -21,7 +21,7 @@ import {
   UserRound,
   Wrench
 } from "lucide-react";
-import { api, setToken } from "./services/api";
+import { api, getToken, setToken } from "./services/api";
 import { money } from "./utils/format";
 import "./styles.css";
 
@@ -34,9 +34,47 @@ const demoUsers = [
   "admin@example.com"
 ];
 
+function routeFromPath(pathname = window.location.pathname) {
+  const path = pathname.replace(/\/+$/, "") || "/";
+  if (path === "/" || path === "/products") return { view: "products" };
+  if (path.startsWith("/products/")) return { view: "detail", productId: decodeURIComponent(path.slice(10)) };
+  if (path === "/login") return { view: "login" };
+  if (path === "/cart") return { view: "cart" };
+  if (path === "/checkout") return { view: "checkout" };
+  if (path === "/payment") return { view: "payment" };
+  if (path === "/orders") return { view: "orders" };
+  if (path.startsWith("/orders/")) return { view: "order-detail", orderId: decodeURIComponent(path.slice(8)) };
+  if (path === "/admin") return { view: "admin" };
+  return { view: "products" };
+}
+
+function pathForRoute(route) {
+  if (route.view === "detail") return `/products/${encodeURIComponent(route.productId)}`;
+  if (route.view === "order-detail") return `/orders/${encodeURIComponent(route.orderId)}`;
+  return {
+    products: "/products",
+    login: "/login",
+    cart: "/cart",
+    checkout: "/checkout",
+    payment: "/payment",
+    orders: "/orders",
+    admin: "/admin"
+  }[route.view] || "/products";
+}
+
+const protectedRoutes = {
+  cart: true,
+  checkout: true,
+  payment: true,
+  orders: true,
+  "order-detail": true,
+  admin: "ADMIN"
+};
+
 function App() {
   const [user, setUser] = useState(null);
-  const [view, setView] = useState("products");
+  const [route, setRoute] = useState(routeFromPath);
+  const [authReady, setAuthReady] = useState(!getToken());
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -46,11 +84,43 @@ function App() {
   const [paymentResult, setPaymentResult] = useState(null);
   const [filters, setFilters] = useState({ keyword: "", brand: "", category: "", sort: "" });
   const [message, setMessage] = useState("");
+  const view = route.view;
 
   useEffect(() => {
     loadProducts();
     api("/api/categories").then((data) => setCategories(data.categories)).catch(() => {});
+    if (getToken()) {
+      api("/api/users/me")
+        .then((data) => {
+          setUser(data);
+          setAuthReady(true);
+        })
+        .catch(() => {
+          setToken(null);
+          setAuthReady(true);
+        });
+    }
+
+    const onPopState = () => setRoute(routeFromPath());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
+  useEffect(() => {
+    if (view === "detail" && route.productId && selectedProduct?.product_id !== route.productId) {
+      openProduct(route.productId, false);
+    }
+    if (authReady && user && view === "order-detail" && route.orderId && selectedOrder?.order_id !== route.orderId) {
+      openOrder(route.orderId, false);
+    }
+  }, [authReady, route.orderId, route.productId, selectedOrder?.order_id, selectedProduct?.product_id, user, view]);
+
+  function navigate(nextRoute, push = true) {
+    setMessage("");
+    setRoute(nextRoute);
+    const path = pathForRoute(nextRoute);
+    if (push && window.location.pathname !== path) window.history.pushState(null, "", path);
+  }
 
   async function run(action) {
     setMessage("");
@@ -67,7 +137,7 @@ function App() {
     if (!data) return;
     setToken(data.accessToken);
     setUser(data.user);
-    setView("products");
+    if (view === "login") navigate({ view: "products" });
     await loadCart();
   }
 
@@ -76,7 +146,7 @@ function App() {
     setUser(null);
     setCart(null);
     setOrders([]);
-    setView("login");
+    navigate({ view: "login" });
   }
 
   async function loadProducts(nextFilters = filters) {
@@ -96,10 +166,14 @@ function App() {
   }
 
   async function addToCart(product, quantity = 1) {
+    if (!user) {
+      navigate({ view: "cart" });
+      return;
+    }
     const data = await run(() => api("/api/cart/items", { method: "POST", body: { product_id: product.product_id, quantity } }));
     if (data) {
       setCart(data.cart);
-      setView("cart");
+      navigate({ view: "cart" });
     }
   }
 
@@ -120,14 +194,14 @@ function App() {
 
   async function checkout() {
     const data = await run(() => api("/api/checkout", { method: "POST", body: {} }));
-    if (data) setView("checkout");
+    if (data) navigate({ view: "checkout" });
   }
 
   async function createOrder() {
     const data = await run(() => api("/api/orders", { method: "POST", body: { shipping_address: user.address || "Demo Address" } }));
     if (data) {
       setSelectedOrder(data);
-      setView("payment");
+      navigate({ view: "payment" });
       await loadCart();
     }
   }
@@ -146,20 +220,20 @@ function App() {
     }
   }
 
-  async function openProduct(productId) {
+  async function openProduct(productId, push = true) {
     const detail = await run(() => api(`/api/products/${productId}`));
     if (detail) {
       setSelectedProduct(detail);
-      setView("detail");
+      navigate({ view: "detail", productId }, push);
       requestAnimationFrame(() => window.scrollTo({ top: 0 }));
     }
   }
 
-  async function openOrder(orderId) {
+  async function openOrder(orderId, push = true) {
     const detail = await run(() => api(`/api/orders/${orderId}`));
     if (detail) {
       setSelectedOrder(detail);
-      setView("order-detail");
+      navigate({ view: "order-detail", orderId }, push);
       requestAnimationFrame(() => window.scrollTo({ top: 0 }));
     }
   }
@@ -171,7 +245,7 @@ function App() {
     <div className="shop-app">
       <header className="market-header">
         <div className="header-inner">
-          <button className="brand" onClick={() => setView("products")} type="button">
+          <button className="brand" onClick={() => navigate({ view: "products" })} type="button">
             <ShoppingBag />
             <span>ShopLite</span>
           </button>
@@ -184,18 +258,18 @@ function App() {
                 const next = { ...filters, keyword: event.target.value };
                 setFilters(next);
                 loadProducts(next);
-                setView("products");
+                navigate({ view: "products" });
               }}
             />
           </label>
           <nav className="header-actions">
-            <button className={view === "products" ? "active" : ""} onClick={() => setView("products")} type="button"><Home /> Home</button>
-            <button className={view === "cart" ? "active" : ""} onClick={() => { loadCart(); setView("cart"); }} type="button">
+            <button className={view === "products" ? "active" : ""} onClick={() => navigate({ view: "products" })} type="button"><Home /> Home</button>
+            <button className={view === "cart" ? "active" : ""} onClick={() => navigate({ view: "cart" })} type="button">
               <ShoppingCart /> Cart <span className="cart-badge">{cartCount}</span>
             </button>
-            <button className={view === "orders" ? "active" : ""} onClick={() => { loadOrders(); setView("orders"); }} type="button"><History /> Orders</button>
-            <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")} type="button"><Wrench /> Admin</button>
-            {user ? <button onClick={logout} type="button"><LogOut /> Logout</button> : <button onClick={() => setView("login")} type="button"><UserRound /> Login</button>}
+            <button className={view === "orders" ? "active" : ""} onClick={() => navigate({ view: "orders" })} type="button"><History /> Orders</button>
+            <button className={view === "admin" ? "active" : ""} onClick={() => navigate({ view: "admin" })} type="button"><Wrench /> Admin</button>
+            {user ? <button onClick={logout} type="button"><LogOut /> Logout</button> : <button onClick={() => navigate({ view: "login" })} type="button"><UserRound /> Login</button>}
           </nav>
         </div>
         <div className="shop-strip">
@@ -218,27 +292,28 @@ function App() {
         )}
 
         {message && <div className="alert">{message}</div>}
-        {!user && !["products", "detail", "login"].includes(view) ? <Login onLogin={login} /> : null}
-        {view === "login" && <Login onLogin={login} />}
-        {view === "products" && (
-          <Products
-            products={products}
-            filters={filters}
-            setFilters={setFilters}
-            categories={categories}
-            brands={brands}
-            onSearch={loadProducts}
-            onSelect={(product) => openProduct(product.product_id)}
-            onAdd={addToCart}
-          />
-        )}
-        {view === "detail" && selectedProduct && <ProductDetail product={selectedProduct} onBack={() => setView("products")} onAdd={addToCart} />}
-        {view === "cart" && <Cart cart={cart} onLoad={loadCart} onUpdate={updateCartItem} onRemove={removeCartItem} onVoucher={applyVoucher} onCheckout={checkout} />}
-        {view === "checkout" && <Checkout cart={cart} onCreateOrder={createOrder} />}
-        {view === "payment" && <Payment order={selectedOrder} result={paymentResult} onPay={pay} onDetail={() => openOrder(selectedOrder.order_id)} />}
-        {view === "orders" && <Orders orders={orders} onOpen={openOrder} />}
-        {view === "order-detail" && selectedOrder && <OrderDetail order={selectedOrder} />}
-        {view === "admin" && <Admin products={products} onDone={() => loadProducts()} />}
+        <RouteGuard authReady={authReady} user={user} role={protectedRoutes[view]} onLogin={login}>
+          {view === "login" && <Login onLogin={login} />}
+          {view === "products" && (
+            <Products
+              products={products}
+              filters={filters}
+              setFilters={setFilters}
+              categories={categories}
+              brands={brands}
+              onSearch={loadProducts}
+              onSelect={(product) => openProduct(product.product_id)}
+              onAdd={addToCart}
+            />
+          )}
+          {view === "detail" && selectedProduct && <ProductDetail product={selectedProduct} onBack={() => navigate({ view: "products" })} onAdd={addToCart} />}
+          {view === "cart" && <Cart cart={cart} onLoad={loadCart} onUpdate={updateCartItem} onRemove={removeCartItem} onVoucher={applyVoucher} onCheckout={checkout} />}
+          {view === "checkout" && <Checkout cart={cart} onCreateOrder={createOrder} />}
+          {view === "payment" && (selectedOrder ? <Payment order={selectedOrder} result={paymentResult} onPay={pay} onDetail={() => openOrder(selectedOrder.order_id)} /> : <section className="panel">Open an order before payment.</section>)}
+          {view === "orders" && <Orders orders={orders} onLoad={loadOrders} onOpen={openOrder} />}
+          {view === "order-detail" && selectedOrder && <OrderDetail order={selectedOrder} />}
+          {view === "admin" && <Admin products={products} onDone={() => loadProducts()} />}
+        </RouteGuard>
       </main>
     </div>
   );
@@ -256,6 +331,16 @@ function viewTitle(view) {
     "order-detail": "Order Detail",
     admin: "Admin Inventory"
   }[view] || "ShopLite";
+}
+
+function RouteGuard({ authReady, user, role, onLogin, children }) {
+  if (!role) return children;
+  if (!authReady) return <section className="panel">Loading...</section>;
+  if (!user) return <Login onLogin={onLogin} />;
+  if (role !== true && user.role !== role) {
+    return <section className="panel alert">403 FORBIDDEN: Admin role is required.</section>;
+  }
+  return children;
 }
 
 function Login({ onLogin }) {
@@ -329,7 +414,8 @@ function Payment({ order, result, onPay, onDetail }) {
   );
 }
 
-function Orders({ orders, onOpen }) {
+function Orders({ orders, onLoad, onOpen }) {
+  useEffect(() => { onLoad(); }, []);
   return (
     <section className="panel">
       {orders.map((order) => (
