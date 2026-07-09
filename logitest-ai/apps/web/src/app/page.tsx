@@ -1,5 +1,25 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  BarChart3,
+  Bot,
+  BrainCircuit,
+  ClipboardCheck,
+  Code2,
+  Copy,
+  Database,
+  FileText,
+  GitBranch,
+  LayoutDashboard,
+  ListChecks,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Play,
+  RefreshCcw,
+  ShieldCheck,
+  type LucideIcon,
+} from "lucide-react";
 
 import {
   API_BASE_URL,
@@ -38,6 +58,36 @@ const VIEWS = [
 const LOG_PAGE_SIZE = 100;
 const LIST_PAGE_SIZE = 100;
 const PIPELINE_BATCH_SIZE = 500;
+
+const VIEW_ICONS: Record<View, LucideIcon> = {
+  Overview: LayoutDashboard,
+  "Full Pipeline": GitBranch,
+  "Step Runner": Play,
+  Intelligence: BrainCircuit,
+  Oracle: ShieldCheck,
+  Regression: BarChart3,
+};
+
+const TAB_ICONS: Record<Tab, LucideIcon> = {
+  Logs: Database,
+  Sessions: Activity,
+  Journeys: GitBranch,
+  "Test Cases": ClipboardCheck,
+  Runs: ListChecks,
+  Report: FileText,
+};
+
+const ACTION_ICONS: Record<string, LucideIcon> = {
+  "Run Full Pipeline": Play,
+  "Load Demo Evidence": Bot,
+  Refresh: RefreshCcw,
+  "Import from ES": Database,
+  "Import Mock Logs": Database,
+  Analyze: BrainCircuit,
+  "Generate Jest": Code2,
+  "Run Test": Play,
+  "Clear Database": ShieldCheck,
+};
 
 type Tab = (typeof TABS)[number];
 type View = (typeof VIEWS)[number];
@@ -746,18 +796,13 @@ export default function Home() {
 
           <nav className="flex gap-1 overflow-x-auto border-b border-slate-300 lg:hidden">
             {VIEWS.map((view) => (
-              <button
-                className={`h-10 whitespace-nowrap border border-b-0 px-3 text-sm font-medium ${
-                  activeView === view
-                    ? "border-slate-300 bg-white text-slate-950"
-                    : "border-transparent text-slate-600 hover:bg-white"
-                }`}
+              <NavTab
+                active={activeView === view}
+                icon={VIEW_ICONS[view]}
                 key={view}
+                label={view}
                 onClick={() => setActiveView(view)}
-                type="button"
-              >
-                {view}
-              </button>
+              />
             ))}
           </nav>
 
@@ -801,10 +846,11 @@ export default function Home() {
                   {busy ? `${busy}...` : "Pipeline status"}
                 </p>
                 <button
-                  className="h-8 border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+                  className="inline-flex h-8 items-center gap-1 border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
                   onClick={copyPipelineStatus}
                   type="button"
                 >
+                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
                   {statusCopied ? "Copied" : "Copy"}
                 </button>
               </div>
@@ -922,18 +968,13 @@ export default function Home() {
             className={`flex gap-1 overflow-x-auto border-b border-slate-300 ${showOperationalData ? "" : "hidden"}`}
           >
             {TABS.map((tab) => (
-              <button
-                className={`h-10 whitespace-nowrap border border-b-0 px-3 text-sm font-medium ${
-                  activeTab === tab
-                    ? "border-slate-300 bg-white text-slate-950"
-                    : "border-transparent text-slate-600 hover:bg-white"
-                }`}
+              <NavTab
+                active={activeTab === tab}
+                icon={TAB_ICONS[tab]}
                 key={tab}
+                label={tab}
                 onClick={() => setActiveTab(tab)}
-                type="button"
-              >
-                {tab}
-              </button>
+              />
             ))}
           </nav>
 
@@ -1034,10 +1075,14 @@ function Header({
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-        <Metric label="Logs" value={evidence.summary.logs} />
-        <Metric label="Journeys" value={evidence.summary.journeys} />
-        <Metric label="Tests" value={evidence.summary.generated_tests} />
-        <Metric label="Runs" value={evidence.summary.runs} />
+        <Metric icon={Database} label="Logs" value={evidence.summary.logs} />
+        <Metric icon={GitBranch} label="Journeys" value={evidence.summary.journeys} />
+        <Metric
+          icon={ClipboardCheck}
+          label="Tests"
+          value={evidence.summary.generated_tests}
+        />
+        <Metric icon={Activity} label="Runs" value={evidence.summary.runs} />
       </div>
     </header>
   );
@@ -1074,25 +1119,33 @@ function DashboardSidebar({
           onClick={onToggle}
           type="button"
         >
-          {isOpen ? "<" : ">"}
+          {isOpen ? (
+            <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
+          )}
         </button>
       </div>
       <nav className="grid gap-1 p-2">
-        {views.map((view, index) => (
-          <button
-            className={`min-h-10 border px-3 text-left text-sm font-medium ${
-              activeView === view
-                ? "border-red-700 bg-red-50 text-red-800"
-                : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50"
-            }`}
-            key={view}
-            onClick={() => onSelect(view)}
-            title={view}
-            type="button"
-          >
-            {isOpen ? view : String(index + 1)}
-          </button>
-        ))}
+        {views.map((view) => {
+          const Icon = VIEW_ICONS[view];
+          return (
+            <button
+              className={`flex min-h-10 items-center gap-2 border px-3 text-left text-sm font-medium ${
+                activeView === view
+                  ? "border-red-700 bg-red-50 text-red-800"
+                  : "border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50"
+              }`}
+              key={view}
+              onClick={() => onSelect(view)}
+              title={view}
+              type="button"
+            >
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {isOpen ? <span>{view}</span> : null}
+            </button>
+          );
+        })}
       </nav>
     </aside>
   );
@@ -1120,10 +1173,11 @@ function PipelineStatusPanel({
           {busy ? `${busy}...` : "Pipeline status"}
         </p>
         <button
-          className="h-8 border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
+          className="inline-flex h-8 items-center gap-1 border border-slate-300 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-100"
           onClick={onCopy}
           type="button"
         >
+          <Copy className="h-3.5 w-3.5" aria-hidden="true" />
           {statusCopied ? "Copied" : "Copy"}
         </button>
       </div>
@@ -1139,9 +1193,18 @@ function PipelineStatusPanel({
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: number;
+}) {
   return (
     <div className="min-w-20 border border-slate-200 bg-white px-3 py-2">
+      <Icon className="mx-auto mb-1 h-4 w-4 text-red-700" aria-hidden="true" />
       <div className="text-xl font-semibold">{value}</div>
       <div className="text-xs uppercase text-slate-500">{label}</div>
     </div>
@@ -1503,6 +1566,33 @@ function TokenList({ title, values }: { title: string; values: string[] }) {
   );
 }
 
+function NavTab({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`inline-flex h-10 items-center gap-2 whitespace-nowrap border border-b-0 px-3 text-sm font-medium ${
+        active
+          ? "border-slate-300 bg-white text-slate-950"
+          : "border-transparent text-slate-600 hover:bg-white"
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      <Icon className="h-4 w-4" aria-hidden="true" />
+      {label}
+    </button>
+  );
+}
+
 function ActionButton({
   disabled,
   label,
@@ -1514,9 +1604,10 @@ function ActionButton({
   onClick: () => void;
   variant?: "primary" | "danger";
 }) {
+  const Icon = ACTION_ICONS[label] ?? Play;
   return (
     <button
-      className={`h-9 border px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500 ${
+      className={`inline-flex h-9 items-center gap-2 border px-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-200 disabled:text-slate-500 ${
         variant === "danger"
           ? "border-rose-700 bg-rose-700 hover:bg-rose-800"
           : "border-slate-900 bg-slate-950 hover:bg-slate-800"
@@ -1525,6 +1616,7 @@ function ActionButton({
       onClick={onClick}
       type="button"
     >
+      <Icon className="h-4 w-4" aria-hidden="true" />
       {label}
     </button>
   );

@@ -267,6 +267,26 @@ def test_prepare_request_keeps_literal_product_id_without_body_use() -> None:
 
     assert body["product_id"] == "selected-product"
 
+def test_capture_extracts_finds_product_in_cart_items_and_reuses_existing_value() -> None:
+    variables = {}
+    captured, missing = service._capture_extracts(
+        {"product_id": "response.body.product_id"},
+        {"cart": {"items": [{"product_id": "current-product"}]}},
+        variables,
+    )
+
+    assert captured == {"product_id": "current-product"}
+    assert missing == []
+
+    captured, missing = service._capture_extracts(
+        {"product_id": "response.body.product_id"},
+        {"order_status": "PAID"},
+        variables,
+    )
+
+    assert captured == {"product_id": "current-product"}
+    assert missing == []
+
 def test_reset_demo_state_sends_token_for_remote_target(monkeypatch) -> None:
     fake_client = FakeHttpClient([])
     monkeypatch.setattr(service.settings, "demo_control_token", "demo-secret")

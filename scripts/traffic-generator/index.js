@@ -108,6 +108,10 @@ function timestamp() {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
+function syntheticProductName(index) {
+  return `${FIXTURES.syntheticProduct.namePrefix}${String(index).padStart(2, "0")}`;
+}
+
 function buildConfig(args) {
   const requestedMode = String(envValue("MODE", args, "demo")).toLowerCase();
   const mode = MODE_DEFAULTS[requestedMode] ? requestedMode : "demo";
@@ -268,14 +272,32 @@ async function ensureUserPool(client, ctx, config) {
 
 async function ensureSyntheticProduct(client, ctx, stock = FIXTURES.syntheticProduct.stock) {
   if (ctx.syntheticProduct && ctx.syntheticProduct.stock >= stock) return ctx.syntheticProduct;
+  if (ctx.syntheticProductPromise) return ctx.syntheticProductPromise;
+  ctx.syntheticProductPromise = createSyntheticProduct(client, ctx, stock).finally(() => {
+    ctx.syntheticProductPromise = null;
+  });
+  return ctx.syntheticProductPromise;
+}
+
+async function createSyntheticProduct(client, ctx, stock) {
   const token = await loginAdmin(client, ctx);
   if (!token) return null;
   const product = FIXTURES.syntheticProduct;
   const session = makeSession("admin_create_synthetic_product", ctx.runId);
+  const list = await client.request(session, "GET", `/api/products?keyword=${encodeURIComponent(product.namePrefix)}`);
+  const existing = list.payload.products || [];
+  const reusable = existing.find((item) => item.stock >= stock);
+  if (reusable) {
+    ctx.syntheticProduct = { product_id: reusable.product_id, name: reusable.name, stock: reusable.stock };
+    return ctx.syntheticProduct;
+  }
+  const usedNames = new Set(existing.map((item) => item.name));
+  const name = Array.from({ length: 100 }, (_, index) => syntheticProductName(index)).find((item) => !usedNames.has(item));
+  if (!name) return null;
   const response = await client.request(session, "POST", "/api/admin/products", {
     token,
     body: {
-      name: `${product.namePrefix}_${ctx.runId}_${stock}`,
+      name,
       brand: product.brand,
       category: product.category,
       description: product.description,
@@ -479,7 +501,8 @@ async function main() {
     users: buildUsers(config),
     summary,
     adminToken: "",
-    syntheticProduct: null
+    syntheticProduct: null,
+    syntheticProductPromise: null
   };
   const client = new TrafficClient(config, summary, random);
   const sessions = buildSessions(config, random);
@@ -514,5 +537,6 @@ module.exports = {
   buildSessions,
   finalizeSummary,
   makeRandom,
-  sessionsForTargetLogs
+  sessionsForTargetLogs,
+  syntheticProductName
 };

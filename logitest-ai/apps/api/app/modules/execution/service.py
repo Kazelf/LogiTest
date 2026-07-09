@@ -340,6 +340,8 @@ def _capture_extracts(extracts: dict[str, str], response_body: Any, variables: d
         value = _value_at_path({"response": {"body": response_body}, "body": response_body}, str(path))
         if value is None:
             value = _fallback_extract(str(name), response_body)
+        if value is None:
+            value = variables.get(str(name))
         if value is not None:
             variables[str(name)] = value
             captured[str(name)] = value
@@ -360,6 +362,10 @@ def _fallback_extract(name: str, response_body: Any) -> Any:
         items = response_body.get("items")
         if isinstance(items, list) and items and isinstance(items[0], dict):
             return items[0].get("product_id") or items[0].get("productId")
+        cart = response_body.get("cart")
+        cart_items = cart.get("items") if isinstance(cart, dict) else None
+        if isinstance(cart_items, list) and cart_items and isinstance(cart_items[0], dict):
+            return cart_items[0].get("product_id") or cart_items[0].get("productId")
     return None
 
 

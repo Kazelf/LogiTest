@@ -1,6 +1,26 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { CreditCard, History, LogOut, Package, Search, ShoppingCart, Tag, UserRound, Wrench } from "lucide-react";
+import {
+  Bell,
+  ChevronLeft,
+  CreditCard,
+  Heart,
+  History,
+  Home,
+  LogOut,
+  Package,
+  Search,
+  ShieldCheck,
+  ShoppingBag,
+  ShoppingCart,
+  SlidersHorizontal,
+  Star,
+  Store,
+  Tag,
+  Truck,
+  UserRound,
+  Wrench
+} from "lucide-react";
 import { api, setToken } from "./services/api";
 import { money } from "./utils/format";
 import "./styles.css";
@@ -131,6 +151,7 @@ function App() {
     if (detail) {
       setSelectedProduct(detail);
       setView("detail");
+      requestAnimationFrame(() => window.scrollTo({ top: 0 }));
     }
   }
 
@@ -139,34 +160,65 @@ function App() {
     if (detail) {
       setSelectedOrder(detail);
       setView("order-detail");
+      requestAnimationFrame(() => window.scrollTo({ top: 0 }));
     }
   }
 
   const brands = useMemo(() => [...new Set(products.map((product) => product.brand))].sort(), [products]);
+  const cartCount = cart?.items?.reduce((total, item) => total + item.quantity, 0) || 0;
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">ShopLite</div>
-        <button className={view === "products" ? "active" : ""} onClick={() => setView("products")}><Package /> Products</button>
-        <button className={view === "cart" ? "active" : ""} onClick={() => { loadCart(); setView("cart"); }}><ShoppingCart /> Cart</button>
-        <button className={view === "orders" ? "active" : ""} onClick={() => { loadOrders(); setView("orders"); }}><History /> Orders</button>
-        <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")}><Wrench /> Admin</button>
-        <div className="spacer" />
-        {user ? <button onClick={logout}><LogOut /> Logout</button> : <button onClick={() => setView("login")}><UserRound /> Login</button>}
-      </aside>
+    <div className="shop-app">
+      <header className="market-header">
+        <div className="header-inner">
+          <button className="brand" onClick={() => setView("products")} type="button">
+            <ShoppingBag />
+            <span>ShopLite</span>
+          </button>
+          <label className="global-search">
+            <Search />
+            <input
+              placeholder="Search in ShopLite"
+              value={filters.keyword}
+              onChange={(event) => {
+                const next = { ...filters, keyword: event.target.value };
+                setFilters(next);
+                loadProducts(next);
+                setView("products");
+              }}
+            />
+          </label>
+          <nav className="header-actions">
+            <button className={view === "products" ? "active" : ""} onClick={() => setView("products")} type="button"><Home /> Home</button>
+            <button className={view === "cart" ? "active" : ""} onClick={() => { loadCart(); setView("cart"); }} type="button">
+              <ShoppingCart /> Cart <span className="cart-badge">{cartCount}</span>
+            </button>
+            <button className={view === "orders" ? "active" : ""} onClick={() => { loadOrders(); setView("orders"); }} type="button"><History /> Orders</button>
+            <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")} type="button"><Wrench /> Admin</button>
+            {user ? <button onClick={logout} type="button"><LogOut /> Logout</button> : <button onClick={() => setView("login")} type="button"><UserRound /> Login</button>}
+          </nav>
+        </div>
+        <div className="shop-strip">
+          <span><ShieldCheck /> Buyer protection</span>
+          <span><Truck /> Fast delivery</span>
+          <span><Bell /> Live demo logs enabled</span>
+          {user ? <span className="user-chip"><UserRound /> {user.email}</span> : null}
+        </div>
+      </header>
 
-      <main>
-        <header className="topbar">
-          <div>
-            <h1>{viewTitle(view)}</h1>
-            <p>{user ? user.email : "Login with a demo user to create journey logs."}</p>
-          </div>
-          {user && <span className="role">{user.role}</span>}
-        </header>
+      <main className="market-main">
+        {view !== "products" && (
+          <header className="page-head">
+            <div>
+              <h1>{viewTitle(view)}</h1>
+              <p>{user ? user.email : "Login with a demo user to create journey logs."}</p>
+            </div>
+            {user && <span className="role">{user.role}</span>}
+          </header>
+        )}
 
         {message && <div className="alert">{message}</div>}
-        {!user && view !== "products" ? <Login onLogin={login} /> : null}
+        {!user && !["products", "detail", "login"].includes(view) ? <Login onLogin={login} /> : null}
         {view === "login" && <Login onLogin={login} />}
         {view === "products" && (
           <Products
@@ -220,69 +272,6 @@ function Login({ onLogin }) {
   );
 }
 
-function Products({ products, filters, setFilters, categories, brands, onSearch, onSelect, onAdd }) {
-  function change(key, value) {
-    const next = { ...filters, [key]: value };
-    setFilters(next);
-    onSearch(next);
-  }
-  return (
-    <>
-      <section className="toolbar">
-        <label><Search /> <input placeholder="Search keyword" value={filters.keyword} onChange={(event) => change("keyword", event.target.value)} /></label>
-        <select value={filters.category} onChange={(event) => change("category", event.target.value)}>
-          <option value="">All categories</option>
-          {categories.map((category) => <option key={category.category_id}>{category.name}</option>)}
-        </select>
-        <select value={filters.brand} onChange={(event) => change("brand", event.target.value)}>
-          <option value="">All brands</option>
-          {brands.map((brand) => <option key={brand}>{brand}</option>)}
-        </select>
-        <select value={filters.sort} onChange={(event) => change("sort", event.target.value)}>
-          <option value="">Default sort</option>
-          <option value="price_asc">Price asc</option>
-          <option value="price_desc">Price desc</option>
-        </select>
-      </section>
-      <section className="product-grid">
-        {products.map((product) => (
-          <article className="product-card" key={product.product_id}>
-            <div className="product-art">{product.brand.slice(0, 2)}</div>
-            <h2>{product.name}</h2>
-            <p>{product.brand} · {product.category}</p>
-            <strong>{money(product.price)}</strong>
-            <span>Stock {product.stock}</span>
-            <div className="row">
-              <button onClick={() => onSelect(product)}>Detail</button>
-              <button className="primary" onClick={() => onAdd(product)}>Add</button>
-            </div>
-          </article>
-        ))}
-      </section>
-    </>
-  );
-}
-
-function ProductDetail({ product, onBack, onAdd }) {
-  return (
-    <section className="panel split">
-      <div className="product-art large">{product.brand.slice(0, 2)}</div>
-      <div>
-        <button onClick={onBack}>Back</button>
-        <h2>{product.name}</h2>
-        <p>{product.description}</p>
-        <dl>
-          <dt>Product ID</dt><dd>{product.product_id}</dd>
-          <dt>Brand</dt><dd>{product.brand}</dd>
-          <dt>Price</dt><dd>{money(product.price)}</dd>
-          <dt>Stock</dt><dd>{product.stock}</dd>
-        </dl>
-        <button className="primary" onClick={() => onAdd(product)}>Add to cart</button>
-      </div>
-    </section>
-  );
-}
-
 function Cart({ cart, onLoad, onUpdate, onRemove, onVoucher, onCheckout }) {
   useEffect(() => { onLoad(); }, []);
   if (!cart) return null;
@@ -290,7 +279,7 @@ function Cart({ cart, onLoad, onUpdate, onRemove, onVoucher, onCheckout }) {
     <section className="panel">
       {cart.items.map((item) => (
         <div className="line-item" key={item.cart_item_id}>
-          <div><strong>{item.name}</strong><span>{money(item.price)} · stock {item.stock}</span></div>
+          <div><strong>{item.name}</strong><span>{money(item.price)} / stock {item.stock}</span></div>
           <input type="number" min="1" value={item.quantity} onChange={(event) => onUpdate(item, Number(event.target.value))} />
           <strong>{money(item.line_total)}</strong>
           <button onClick={() => onRemove(item)}>Remove</button>
@@ -329,7 +318,7 @@ function Payment({ order, result, onPay, onDetail }) {
   return (
     <section className="panel">
       <h2>Order {order?.order_id}</h2>
-      <p>Status: {order?.order_status} · Payment: {order?.payment_status}</p>
+      <p>Status: {order?.order_status} / Payment: {order?.payment_status}</p>
       {result && <pre>{JSON.stringify(result, null, 2)}</pre>}
       <div className="row">
         <button className="primary" onClick={() => onPay(true)}><CreditCard /> Simulate success</button>
@@ -358,7 +347,7 @@ function OrderDetail({ order }) {
   return (
     <section className="panel">
       <h2>{order.order_id}</h2>
-      <p>{order.order_status} · {order.payment_status}</p>
+      <p>{order.order_status} / {order.payment_status}</p>
       {order.items.map((item) => (
         <div className="line-item" key={item.order_item_id}>
           <strong>{item.name}</strong>
@@ -387,6 +376,142 @@ function Admin({ products, onDone }) {
       </select>
       <input type="number" min="0" value={stock} onChange={(event) => setStock(Number(event.target.value))} />
       <button className="primary" onClick={updateStock}>Update stock</button>
+    </section>
+  );
+}
+
+function ProductArt({ product, large = false }) {
+  return (
+    <div className={`product-art ${large ? "large" : ""}`}>
+      <span>{product.brand.slice(0, 2)}</span>
+      <small>{product.category}</small>
+    </div>
+  );
+}
+
+function Products({ products, filters, setFilters, categories, brands, onSearch, onSelect, onAdd }) {
+  function change(key, value) {
+    const next = { ...filters, [key]: value };
+    setFilters(next);
+    onSearch(next);
+  }
+
+  return (
+    <>
+      <section className="market-hero">
+        <div>
+          <h1>ShopLite Mall</h1>
+          <p>Flash deals, stocked inventory, and checkout flows wired for LogiTest journey mining.</p>
+          <div className="hero-badges">
+            <span><Star /> Top rated demo store</span>
+            <span><Tag /> SALE50 voucher ready</span>
+          </div>
+        </div>
+        <div className="hero-card">
+          <strong>{products.length}</strong>
+          <span>products available</span>
+          <small>Every click still writes precise request logs.</small>
+        </div>
+      </section>
+
+      <section className="category-rail">
+        <button className={!filters.category ? "active" : ""} onClick={() => change("category", "")} type="button"><Store /> All</button>
+        {categories.map((category) => (
+          <button
+            className={filters.category === category.name ? "active" : ""}
+            key={category.category_id}
+            onClick={() => change("category", category.name)}
+            type="button"
+          >
+            <Package /> {category.name}
+          </button>
+        ))}
+      </section>
+
+      <section className="toolbar">
+        <label><Search /> <input placeholder="Search keyword" value={filters.keyword} onChange={(event) => change("keyword", event.target.value)} /></label>
+        <label><SlidersHorizontal /> Brand
+          <select value={filters.brand} onChange={(event) => change("brand", event.target.value)}>
+            <option value="">All brands</option>
+            {brands.map((brand) => <option key={brand}>{brand}</option>)}
+          </select>
+        </label>
+        <label>Sort
+          <select value={filters.sort} onChange={(event) => change("sort", event.target.value)}>
+            <option value="">Recommended</option>
+            <option value="price_asc">Price asc</option>
+            <option value="price_desc">Price desc</option>
+          </select>
+        </label>
+      </section>
+
+      <section className="product-grid">
+        {products.map((product) => (
+          <article className="product-card" key={product.product_id}>
+            <button className="favorite" aria-label="Save product" type="button"><Heart /></button>
+            <ProductArt product={product} />
+            <div className="product-copy">
+              <h2>{product.name}</h2>
+              <p>{product.brand} / {product.category}</p>
+              <div className="rating"><Star /> 4.8 <span>Sold 1.2k</span></div>
+              <div className="price-row">
+                <strong>{money(product.price)}</strong>
+                <span>Stock {product.stock}</span>
+              </div>
+            </div>
+            <div className="card-actions">
+              <button onClick={() => onSelect(product)} type="button">View</button>
+              <button className="primary" onClick={() => onAdd(product)} type="button"><ShoppingCart /> Add</button>
+            </div>
+          </article>
+        ))}
+      </section>
+    </>
+  );
+}
+
+function ProductDetail({ product, onBack, onAdd }) {
+  const [quantity, setQuantity] = useState(1);
+
+  return (
+    <section className="product-detail">
+      <div className="detail-gallery">
+        <button className="back-link" onClick={onBack} type="button"><ChevronLeft /> Back to shop</button>
+        <ProductArt product={product} large />
+        <div className="thumb-row">
+          <ProductArt product={product} />
+          <ProductArt product={product} />
+          <ProductArt product={product} />
+        </div>
+      </div>
+      <div className="detail-info">
+        <p className="store-line"><Store /> {product.brand} official store</p>
+        <h2>{product.name}</h2>
+        <div className="detail-rating"><Star /> 4.8 <span>2.4k ratings</span><span>8.6k sold</span></div>
+        <p className="description">{product.description}</p>
+        <dl className="specs">
+          <dt>Product ID</dt><dd>{product.product_id}</dd>
+          <dt>Category</dt><dd>{product.category}</dd>
+          <dt>Brand</dt><dd>{product.brand}</dd>
+          <dt>Stock</dt><dd>{product.stock}</dd>
+        </dl>
+      </div>
+      <aside className="buy-box">
+        <span className="voucher"><Tag /> SALE50 available</span>
+        <strong>{money(product.price)}</strong>
+        <label>Quantity
+          <input
+            min="1"
+            max={product.stock || 99}
+            type="number"
+            value={quantity}
+            onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
+          />
+        </label>
+        <button className="primary" onClick={() => onAdd(product, quantity)} type="button"><ShoppingCart /> Add to cart</button>
+        <button onClick={() => onAdd(product, quantity)} type="button"><ShoppingBag /> Buy now</button>
+        <p><ShieldCheck /> Protected checkout and request logging.</p>
+      </aside>
     </section>
   );
 }

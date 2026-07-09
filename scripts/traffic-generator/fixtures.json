@@ -35,9 +35,9 @@
     "valid": [1, 2]
   },
   "syntheticProduct": {
-    "namePrefix": "synthetic_traffic_product",
-    "brand": "TrafficLab",
-    "category": "Synthetic",
+    "namePrefix": "Laptop Dell X",
+    "brand": "Dell",
+    "category": "Laptop",
     "description": "Synthetic product created by traffic generator.",
     "price": 99000,
     "stock": 10000
