@@ -290,6 +290,52 @@ def test_build_test_case_draft_preserves_get_query_filters() -> None:
 
     assert draft["steps"][0]["endpoint"] == "/api/products?category=Accessories"
 
+def test_build_test_case_draft_resolves_product_detail_placeholder() -> None:
+    journey = {
+        **_journey(),
+        "steps": [
+            {"order": 1, "action_type": "search_product"},
+            {"order": 2, "action_type": "view_product"},
+        ],
+    }
+    logs = [
+        _log("GET", "/api/categories", 200, {}, {"categories": []}, "search_product"),
+        _log(
+            "GET",
+            "/api/products/:id",
+            200,
+            {},
+            {"product_id": "old-product", "name": "Dell Inspiron 15", "brand": "Dell", "category": "Laptop", "price": 15000000},
+            "view_product",
+        ),
+    ]
+
+    draft = service._build_test_case_draft(journey, logs)
+
+    assert [step["endpoint"] for step in draft["steps"]] == [
+        "/api/categories",
+        "/api/products?keyword=Dell+Inspiron+15",
+        "/api/products/:id",
+    ]
+    assert draft["steps"][1]["extract"] == {"product_id": "response.body.products[0].product_id"}
+    assert draft["steps"][2]["uses"] == {"product_id": "path"}
+
+def test_wire_order_id_uses_keeps_order_subresource_path() -> None:
+    steps = [
+        {
+            "method": "POST",
+            "endpoint": "/api/orders",
+            "expected_status": 201,
+            "extract": {"order_id": "response.body.order_id"},
+        },
+        {"method": "POST", "endpoint": "/api/orders/old-order/cancel", "expected_status": 200},
+    ]
+
+    service._wire_order_id_uses(steps)
+
+    assert steps[1]["endpoint"] == "/api/orders/:id/cancel"
+    assert steps[1]["uses"] == {"order_id": "path"}
+
 def test_build_test_case_draft_adds_login_before_auth_only_journey() -> None:
     journey = {**_journey(), "steps": [{"order": 1, "action_type": "add_to_cart"}]}
     logs = [

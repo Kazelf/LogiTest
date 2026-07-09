@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlencode, urljoin, urlparse
 
 import httpx
 from psycopg.rows import dict_row
@@ -235,6 +235,7 @@ def _execute_steps(steps: list[dict[str, Any]], *, base_url: str, timeout_second
             endpoint = str(step.get("endpoint") or "/")
             request_payload = _replace_request_body_uses(step.get("request_payload") or {}, step.get("uses") or {}, variables)
             resolved_endpoint = _replace_path_uses(endpoint, step.get("uses") or {}, variables)
+            resolved_endpoint = _resolve_product_detail_endpoint(client, base_url, resolved_endpoint, step.get("golden_response"))
             request_payload, headers = _prepare_request(step, method, resolved_endpoint, request_payload, auth_token, variables)
             step_start = perf_counter()
             request_kwargs: dict[str, Any] = {"json": request_payload if method != "GET" else None}
@@ -462,9 +463,43 @@ def _replace_known_resource_path(endpoint: str, variables: dict[str, Any]) -> st
     }
     for prefix, name in replacements.items():
         if endpoint.startswith(prefix) and endpoint != prefix and variables.get(name):
-            return prefix + str(variables[name])
+            tail = endpoint.removeprefix(prefix)
+            _old_id, separator, rest = tail.partition("/")
+            return prefix + str(variables[name]) + (separator + rest if separator else "")
     return endpoint
 
+
+def _resolve_product_detail_endpoint(client: httpx.Client, base_url: str, endpoint: str, golden_response: Any) -> str:
+    if endpoint != "/api/products/:id" or not isinstance(golden_response, dict):
+        return endpoint
+    product_id = _find_product_id(client, base_url, golden_response)
+    return endpoint.replace(":id", str(product_id)) if product_id else endpoint
+
+def _find_product_id(client: httpx.Client, base_url: str, golden_response: dict[str, Any]) -> Any:
+    name = golden_response.get("name") or golden_response.get("product_name")
+    query = {"keyword": name} if name else {}
+    lookup_endpoint = f"/api/products?{urlencode(query)}" if query else "/api/products"
+    try:
+        body = _response_body(client.request("GET", _build_url(base_url, lookup_endpoint)))
+    except Exception:
+        return None
+    products = body.get("products") if isinstance(body, dict) else None
+    if not isinstance(products, list):
+        return None
+    for product in products:
+        if isinstance(product, dict) and _matches_product(product, golden_response):
+            return product.get("product_id")
+    first = products[0] if products and isinstance(products[0], dict) else {}
+    return first.get("product_id")
+
+def _matches_product(product: dict[str, Any], golden_response: dict[str, Any]) -> bool:
+    expected = {
+        "name": golden_response.get("name") or golden_response.get("product_name"),
+        "brand": golden_response.get("brand"),
+        "category": golden_response.get("category"),
+        "price": golden_response.get("price"),
+    }
+    return all(value is None or product.get(key) == value for key, value in expected.items())
 
 def _replace_request_body_uses(value: Any, uses: dict[str, str], variables: dict[str, Any]) -> Any:
     replacements = {name: variables[name] for name, location in uses.items() if location == "request.body" and name in variables}

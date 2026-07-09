@@ -361,6 +361,8 @@ def _make_steps_self_contained(steps: list[dict[str, Any]]) -> list[dict[str, An
     if _needs_synthetic_login(steps):
         steps.insert(0, _synthetic_login_step(steps[0]))
 
+    _wire_product_detail_uses(steps)
+
     payment_index = _first_payment_index(steps)
     if payment_index is not None and not _has_order_creation_before(steps, payment_index):
         if _first_checkout_preview_index(steps) is None:
@@ -429,6 +431,55 @@ def _synthetic_login_step(source_step: dict[str, Any]) -> dict[str, Any]:
             "user": {"name": "Normal Buyer", "role": "BUYER", "email": "***MASKED***"},
         },
         "response_time_ms": source_step.get("response_time_ms"),
+    }
+
+def _wire_product_detail_uses(steps: list[dict[str, Any]]) -> None:
+    index = 0
+    while index < len(steps):
+        step = steps[index]
+        if not _is_product_detail_placeholder(step):
+            index += 1
+            continue
+
+        if not _has_product_id_extract_before(steps, index):
+            list_index = _last_product_list_index(steps, index)
+            if list_index is None:
+                steps.insert(index, _synthetic_product_lookup_step(step))
+                index += 1
+            else:
+                steps[list_index].setdefault("extract", {})["product_id"] = "response.body.products[0].product_id"
+
+        step.setdefault("uses", {})["product_id"] = "path"
+        index += 1
+
+def _is_product_detail_placeholder(step: dict[str, Any]) -> bool:
+    return str(step.get("method") or "GET").upper() == "GET" and str(step.get("endpoint") or "") == "/api/products/:id"
+
+def _has_product_id_extract_before(steps: list[dict[str, Any]], end: int) -> bool:
+    return any("product_id" in (step.get("extract") or {}) for step in steps[:end])
+
+def _last_product_list_index(steps: list[dict[str, Any]], end: int) -> int | None:
+    for index in range(end - 1, -1, -1):
+        endpoint = str(steps[index].get("endpoint") or "")
+        if str(steps[index].get("method") or "GET").upper() == "GET" and endpoint.startswith("/api/products") and ":id" not in endpoint:
+            return index
+    return None
+
+def _synthetic_product_lookup_step(detail_step: dict[str, Any]) -> dict[str, Any]:
+    golden = detail_step.get("golden_response") if isinstance(detail_step.get("golden_response"), dict) else {}
+    name = golden.get("name") or golden.get("product_name")
+    query = {"keyword": name} if name else {}
+    endpoint = f"/api/products?{urlencode(query)}" if query else "/api/products"
+    return {
+        "action_type": "search_product",
+        "service_name": detail_step.get("service_name"),
+        "method": "GET",
+        "endpoint": endpoint,
+        "request_payload": {},
+        "expected_status": 200,
+        "golden_response": {"count": 1},
+        "response_time_ms": detail_step.get("response_time_ms"),
+        "extract": {"product_id": "response.body.products[0].product_id"},
     }
 
 def _synthetic_payment_prerequisites(payment_step: dict[str, Any]) -> list[dict[str, Any]]:
@@ -540,8 +591,14 @@ def _wire_order_id_uses(steps: list[dict[str, Any]]) -> None:
         if endpoint.startswith("/api/payments/") and "order_id" in (step.get("request_payload") or {}):
             step.setdefault("uses", {})["order_id"] = "request.body"
         if endpoint.startswith("/api/orders/"):
-            step["endpoint"] = "/api/orders/:id"
+            step["endpoint"] = _template_order_id_path(endpoint)
             step.setdefault("uses", {})["order_id"] = "path"
+
+def _template_order_id_path(endpoint: str) -> str:
+    parts = endpoint.split("/")
+    if len(parts) > 3:
+        parts[3] = ":id"
+    return "/".join(parts)
 
 def _renumber_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{**step, "order": index + 1} for index, step in enumerate(steps)]

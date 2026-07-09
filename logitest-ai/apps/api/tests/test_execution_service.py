@@ -190,6 +190,70 @@ def test_replace_request_body_uses_matches_camel_and_snake_keys() -> None:
 def test_replace_path_uses_falls_back_to_current_dynamic_resource_ids() -> None:
     assert service._replace_path_uses("/api/cart/items/old-item", {}, {"cart_item_id": "new-item"}) == "/api/cart/items/new-item"
     assert service._replace_path_uses("/api/orders/old-order", {}, {"order_id": "new-order"}) == "/api/orders/new-order"
+    assert service._replace_path_uses("/api/orders/old-order/cancel", {}, {"order_id": "new-order"}) == "/api/orders/new-order/cancel"
+
+def test_run_test_case_resolves_product_detail_placeholder_from_current_target(monkeypatch) -> None:
+    fake_connection = FakeConnection(
+        test_case={
+            "id": "test-case-id",
+            "name": "API test - product detail",
+            "steps": [
+                {
+                    "order": 1,
+                    "method": "GET",
+                    "endpoint": "/api/products/:id",
+                    "request_payload": {},
+                    "expected_status": 200,
+                    "golden_response": {
+                        "product_name": "Dell Inspiron 15",
+                        "brand": "Dell",
+                        "category": "Laptop",
+                        "price": 15000000,
+                    },
+                }
+            ],
+            "assertions": [],
+        }
+    )
+    fake_client = FakeHttpClient(
+        [
+            httpx.Response(
+                200,
+                json={
+                    "products": [
+                        {
+                            "product_id": "current-product",
+                            "name": "Dell Inspiron 15",
+                            "brand": "Dell",
+                            "category": "Laptop",
+                            "price": 15000000,
+                        }
+                    ]
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "product_id": "current-product",
+                    "name": "Dell Inspiron 15",
+                    "brand": "Dell",
+                    "category": "Laptop",
+                    "price": 15000000,
+                },
+            ),
+        ]
+    )
+    monkeypatch.setattr(service.connection, "connect", lambda: fake_connection)
+    monkeypatch.setattr(service.httpx, "Client", lambda timeout: fake_client)
+    monkeypatch.setattr(service, "_reset_demo_state", lambda client, base_url: None)
+
+    run = service.run_test_case("test-case-id", target_base_url="http://shoplite.local")
+
+    assert run["status"] == "passed"
+    assert fake_client.requests[0] == ("GET", "http://shoplite.local/api/products?keyword=Dell+Inspiron+15", None)
+    assert fake_client.requests[1] == ("GET", "http://shoplite.local/api/products/current-product", None)
+    insert_sql, insert_params = fake_connection.cursor_instance.insert_execution
+    assert insert_params[6].obj["steps"][0]["resolved_endpoint"] == "/api/products/current-product"
 
 def test_prepare_request_keeps_literal_product_id_without_body_use() -> None:
     body, _headers = service._prepare_request(
