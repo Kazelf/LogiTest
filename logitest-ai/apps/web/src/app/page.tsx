@@ -52,7 +52,6 @@ const VIEWS = [
   "Full Pipeline",
   "Step Runner",
   "Intelligence",
-  "Oracle",
   "Regression",
 ] as const;
 const LOG_PAGE_SIZE = 100;
@@ -64,7 +63,6 @@ const VIEW_ICONS: Record<View, LucideIcon> = {
   "Full Pipeline": GitBranch,
   "Step Runner": Play,
   Intelligence: BrainCircuit,
-  Oracle: ShieldCheck,
   Regression: BarChart3,
 };
 
@@ -314,6 +312,19 @@ function snapshotFromRealData({
           framework: "Jest/Supertest",
         }
       : DEMO_SNAPSHOT_FALLBACK.regression,
+    evaluation: {
+      logs_per_session: sessionTotal
+        ? (logTotal / sessionTotal).toFixed(1)
+        : "n/a",
+      journey_coverage: `${journeyTotal}/${sessionTotal} sessions`,
+      generated_test_coverage: journeyTotal
+        ? `${testCaseTotal}/${journeyTotal} journeys`
+        : "n/a",
+      run_pass_rate: runTotal
+        ? `${passed}/${runTotal} passed (${Math.round((passed / runTotal) * 100)}%)`
+        : "n/a",
+      regression_runs: failed,
+    },
   };
 }
 
@@ -400,8 +411,7 @@ export default function Home() {
     logTotal + sessionTotal + journeyTotal + testCaseTotal + runTotal > 0;
   const evidence = useMemo(
     () =>
-      demoSnapshot ??
-      (hasRealData
+      hasRealData
         ? snapshotFromRealData({
             journeys,
             journeyTotal,
@@ -411,7 +421,7 @@ export default function Home() {
             sessionTotal,
             testCaseTotal,
           })
-        : DEMO_SNAPSHOT_FALLBACK),
+        : (demoSnapshot ?? DEMO_SNAPSHOT_FALLBACK),
     [
       demoSnapshot,
       hasRealData,
@@ -953,12 +963,6 @@ export default function Home() {
             <ApprovalPanel />
           </section>
           <section
-            className={`grid gap-4 xl:grid-cols-2 ${activeView === "Oracle" ? "" : "hidden"}`}
-          >
-            <GoldenOraclePanel evidence={evidence} />
-            <ProvenancePanel evidence={evidence} />
-          </section>
-          <section
             className={activeView === "Regression" ? "" : "hidden"}
           >
             <RegressionPreview evidence={evidence} />
@@ -1368,54 +1372,6 @@ function ApprovalPanel() {
   );
 }
 
-function GoldenOraclePanel({ evidence }: { evidence: DemoSnapshot }) {
-  return (
-    <Panel
-      title="Golden Oracle"
-      subtitle="Deterministic pass/fail compares stable business behavior."
-    >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TokenList title="Assert" values={evidence.oracle.assert} />
-        <TokenList
-          title="Ignore Dynamic Fields"
-          values={evidence.oracle.ignore}
-        />
-      </div>
-      <div className="mt-4 border border-slate-200 bg-slate-50 p-3 text-sm">
-        <KeyValue label="Latency" value={evidence.oracle.threshold} />
-        <KeyValue
-          label="Layers"
-          value="Status code, response schema, business fields, response time"
-        />
-      </div>
-    </Panel>
-  );
-}
-
-function ProvenancePanel({ evidence }: { evidence: DemoSnapshot }) {
-  const chain = Object.entries(evidence.provenance);
-  return (
-    <Panel
-      title="Provenance Chain"
-      subtitle="Proof that a generated test came from observed logs."
-    >
-      <ol className="space-y-2">
-        {chain.map(([label, value], index) => (
-          <li className="flex items-center gap-2 text-sm" key={label}>
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center border border-slate-300 bg-white text-xs font-semibold">
-              {index + 1}
-            </span>
-            <span className="min-w-28 text-slate-500">{label}</span>
-            <span className="break-all font-mono text-xs font-semibold text-slate-900">
-              {value}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </Panel>
-  );
-}
-
 function RegressionPreview({ evidence }: { evidence: DemoSnapshot }) {
   const r = evidence.regression;
   const diffs = readableReportDiffs(r.diff);
@@ -1526,7 +1482,7 @@ function EvaluationAndScope({ evidence }: { evidence: DemoSnapshot }) {
   return (
     <Panel
       title="Evaluation"
-      subtitle="Demo values are labeled as snapshot evidence when live data is empty."
+      subtitle="Live metrics are computed from imported logs, generated tests, and runs."
     >
       <div className="grid gap-2 text-sm">
         {Object.entries(evidence.evaluation).map(([label, value]) => (
