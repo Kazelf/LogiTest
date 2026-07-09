@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -447,6 +447,7 @@ def _wire_product_detail_uses(steps: list[dict[str, Any]]) -> None:
                 steps.insert(index, _synthetic_product_lookup_step(step))
                 index += 1
             else:
+                _focus_product_list_step(steps[list_index], step)
                 steps[list_index].setdefault("extract", {})["product_id"] = "response.body.products[0].product_id"
 
         step.setdefault("uses", {})["product_id"] = "path"
@@ -461,13 +462,16 @@ def _has_product_id_extract_before(steps: list[dict[str, Any]], end: int) -> boo
 def _last_product_list_index(steps: list[dict[str, Any]], end: int) -> int | None:
     for index in range(end - 1, -1, -1):
         endpoint = str(steps[index].get("endpoint") or "")
-        if str(steps[index].get("method") or "GET").upper() == "GET" and endpoint.startswith("/api/products") and ":id" not in endpoint:
+        if str(steps[index].get("method") or "GET").upper() == "GET" and _is_product_list_endpoint(endpoint):
             return index
     return None
 
+def _is_product_list_endpoint(endpoint: str) -> bool:
+    return endpoint == "/api/products" or endpoint.startswith("/api/products?")
+
 def _synthetic_product_lookup_step(detail_step: dict[str, Any]) -> dict[str, Any]:
     golden = detail_step.get("golden_response") if isinstance(detail_step.get("golden_response"), dict) else {}
-    name = golden.get("name") or golden.get("product_name")
+    name = _golden_product_name(detail_step)
     query = {"keyword": name} if name else {}
     endpoint = f"/api/products?{urlencode(query)}" if query else "/api/products"
     return {
@@ -481,6 +485,22 @@ def _synthetic_product_lookup_step(detail_step: dict[str, Any]) -> dict[str, Any
         "response_time_ms": detail_step.get("response_time_ms"),
         "extract": {"product_id": "response.body.products[0].product_id"},
     }
+
+def _focus_product_list_step(list_step: dict[str, Any], detail_step: dict[str, Any]) -> None:
+    name = _golden_product_name(detail_step)
+    endpoint = str(list_step.get("endpoint") or "")
+    if name and _is_product_list_endpoint(endpoint):
+        list_step["endpoint"] = _endpoint_with_query_value(endpoint, "keyword", name)
+
+def _golden_product_name(step: dict[str, Any]) -> Any:
+    golden = step.get("golden_response") if isinstance(step.get("golden_response"), dict) else {}
+    return golden.get("name") or golden.get("product_name")
+
+def _endpoint_with_query_value(endpoint: str, key: str, value: Any) -> str:
+    split = urlsplit(endpoint)
+    query = [(name, item) for name, item in parse_qsl(split.query, keep_blank_values=True) if name != key]
+    query.append((key, str(value)))
+    return urlunsplit(("", "", split.path, urlencode(query, doseq=True), ""))
 
 def _synthetic_payment_prerequisites(payment_step: dict[str, Any]) -> list[dict[str, Any]]:
     return [
@@ -656,9 +676,14 @@ def _concrete_endpoint(row: dict[str, Any]) -> str | None:
 
 def _demo_request_payload(row: dict[str, Any]) -> dict[str, Any]:
     payload = dict(row.get("request_payload") or {})
+    response_body = row.get("response_body") if isinstance(row.get("response_body"), dict) else {}
+    endpoint = str(row.get("endpoint") or "")
+    if str(row.get("method") or "").upper() == "POST" and endpoint in {"/api/checkout", "/api/orders"}:
+        if not payload.get("shipping_address") and response_body.get("shipping_address"):
+            payload["shipping_address"] = response_body["shipping_address"]
     if str(row.get("method") or "").upper() == "POST" and str(row.get("endpoint") or "").endswith("/auth/login"):
         if payload.get("email") == "***MASKED***":
-            payload["email"] = _demo_email(row.get("response_body") or {})
+            payload["email"] = _demo_email(response_body)
         if payload.get("password") == "***MASKED***":
             payload["password"] = "Password123"
         payload.pop("authorization", None)

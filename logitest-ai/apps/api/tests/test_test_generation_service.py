@@ -266,6 +266,7 @@ def test_build_test_case_draft_makes_payment_flow_self_contained() -> None:
     generated_add_to_cart = draft["steps"][3]
     assert generated_add_to_cart["expected_status"] == 201
     assert generated_add_to_cart["request_payload"] == {"product_id": "product-1", "quantity": 1}
+    assert draft["steps"][4]["request_payload"] == {"shipping_address": "456 Browse Avenue"}
     create_order = draft["steps"][5]
     assert create_order["endpoint"] == "/api/orders"
     assert create_order["expected_status"] == 201
@@ -319,6 +320,32 @@ def test_build_test_case_draft_resolves_product_detail_placeholder() -> None:
     ]
     assert draft["steps"][1]["extract"] == {"product_id": "response.body.products[0].product_id"}
     assert draft["steps"][2]["uses"] == {"product_id": "path"}
+
+def test_build_test_case_draft_focuses_product_list_before_detail() -> None:
+    journey = {
+        **_journey(),
+        "steps": [
+            {"order": 1, "action_type": "search_product"},
+            {"order": 2, "action_type": "view_product"},
+        ],
+    }
+    logs = [
+        _log("GET", "/api/products", 200, {}, {"result_count": 7}, "search_product"),
+        _log(
+            "GET",
+            "/api/products/:id",
+            200,
+            {},
+            {"product_id": "selected-product", "name": "Limited Sneaker", "brand": "Nike", "category": "Fashion", "price": 3000000},
+            "view_product",
+        ),
+    ]
+
+    draft = service._build_test_case_draft(journey, logs)
+
+    assert draft["steps"][0]["endpoint"] == "/api/products?keyword=Limited+Sneaker"
+    assert draft["steps"][0]["extract"] == {"product_id": "response.body.products[0].product_id"}
+    assert draft["steps"][1]["uses"] == {"product_id": "path"}
 
 def test_wire_order_id_uses_keeps_order_subresource_path() -> None:
     steps = [
